@@ -197,6 +197,19 @@ export interface SchwabPriceHistory {
   readonly candles: readonly SchwabPriceCandle[];
 }
 
+// -- Movers --
+
+// Shape from third-party clients (go-trade, schwab-go); confirm live.
+export interface SchwabMoverRow {
+  readonly symbol: string;
+  readonly description?: string;
+  readonly lastPrice?: number;
+  readonly netChange?: number;
+  readonly netPercentChange?: number;
+  readonly totalVolume?: number;
+  readonly volume?: number;
+}
+
 // -- Quotes --
 
 export interface SchwabQuote {

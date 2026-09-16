@@ -169,6 +169,16 @@ export interface AppConfig {
   // IBKR
   readonly ibkrBaseUrl: string;          // default https://localhost:5000/v1/api
 
+  // Webull OpenAPI (research data provider; read-only)
+  readonly webullAppKey: string;
+  readonly webullAppSecret: string;
+  readonly webullEnv: "prod" | "sandbox";
+
+  // Research engine
+  readonly researchProvider: "cboe" | "webull" | "schwab";
+  readonly researchAccountEquity: number;      // dollars used for sizing in packets
+  readonly researchMaxRiskPct: number;         // max planned loss per trade, percent of equity
+
   // LLM (Anthropic Claude). Two model knobs — the brain uses the more capable
   // (and slightly more expensive) Opus tier because brain decisions move
   // trades. News reader + premarket classifier use Sonnet — cheaper, higher

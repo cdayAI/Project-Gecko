@@ -30,6 +30,7 @@ import type {
   SchwabPriceHistory,
   SchwabQuote,
   SchwabUserPreference,
+  SchwabMoverRow,
 } from "./types.js";
 
 const log = createLogger("schwab-rest");
@@ -277,6 +278,40 @@ export class SchwabRest {
       throw new Error(`getQuotes: malformed response`);
     }
     return data as Record<string, SchwabQuote>;
+  }
+
+  // Market movers for an index. Path verified from schwab-py
+  // (/marketdata/v1/movers/{index}, params sort, frequency). Response shape
+  // {screeners:[{symbol, description, lastPrice, netChange, netPercentChange,
+  // totalVolume, volume, trades, marketShare}]} is taken from third-party
+  // clients (go-trade, schwab-go), not first-party docs: validate symbol and
+  // treat every other field as optional until confirmed on a live call.
+  async getMovers(
+    index: "$DJI" | "$COMPX" | "$SPX" | "NYSE" | "NASDAQ" | "OTCBB" | "INDEX_ALL" | "EQUITY_ALL" | "OPTION_ALL" | "OPTION_PUT" | "OPTION_CALL",
+    sort: "VOLUME" | "TRADES" | "PERCENT_CHANGE_UP" | "PERCENT_CHANGE_DOWN",
+    frequency: 0 | 1 | 5 | 10 | 30 | 60 = 0,
+  ): Promise<readonly SchwabMoverRow[]> {
+    const qs = new URLSearchParams({ sort, frequency: String(frequency) });
+    const data = await this.get<unknown>(`${MARKETDATA_BASE}/movers/${encodeURIComponent(index)}?${qs.toString()}`);
+    const d = data as { screeners?: unknown };
+    if (!Array.isArray(d.screeners)) {
+      throw new Error(`getMovers: malformed response (keys: ${typeof data === "object" && data ? Object.keys(data as object).join(",") : typeof data})`);
+    }
+    const out: SchwabMoverRow[] = [];
+    for (const row of d.screeners) {
+      const r = row as Partial<SchwabMoverRow>;
+      if (typeof r.symbol !== "string") continue;
+      out.push({
+        symbol: r.symbol,
+        description: typeof r.description === "string" ? r.description : undefined,
+        lastPrice: typeof r.lastPrice === "number" ? r.lastPrice : undefined,
+        netChange: typeof r.netChange === "number" ? r.netChange : undefined,
+        netPercentChange: typeof r.netPercentChange === "number" ? r.netPercentChange : undefined,
+        totalVolume: typeof r.totalVolume === "number" ? r.totalVolume : undefined,
+        volume: typeof r.volume === "number" ? r.volume : undefined,
+      });
+    }
+    return out;
   }
 
   // ----- Internals -----

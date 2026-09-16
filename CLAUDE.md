@@ -52,6 +52,20 @@ src/
   scanner/
     premarket.ts                    # Daily 9:00 ET gap scanner (universe construction)
     options-chain.ts                # 0DTE SPY chain monitor
+  research/                         # Pre-trade research engine (read-only; see docs/research-engine.md)
+    research-cli.ts                 # npm run research
+    types.ts                        # ResearchPacket, Candidate, OptionStructure, Provenance
+    packet.ts                       # Build, score, render, persist packets under data/research/
+    options-analyzer.ts             # ATM singles + debit spreads priced against the risk budget
+    indicators.ts                   # ATR, SMA, relative volume, 52-week position
+    catalysts.ts                    # Headlines, earnings date, macro calendar
+    osi.ts                          # OCC option symbol parse/build
+    providers/
+      provider.ts                   # MarketDataProvider interface (quotes, bars, movers, chains, earnings)
+      factory.ts                    # RESEARCH_PROVIDER=cboe|webull|schwab
+      cboe-delayed.ts               # Free delayed chains + Yahoo daily bars
+      schwab-provider.ts            # Wraps SchwabRest
+      webull/                       # Webull OpenAPI: signer, client (2FA token flow), provider, types
   intelligence/
     agent-brain.ts                  # Claude validates every trade with full market context
     llm-classifier.ts               # Claude API premarket setup scorer
@@ -148,6 +162,18 @@ Do NOT add a web framework, database, ORM, or test framework.
 - **Order placement:** `POST /trader/v1/accounts/{accountHash}/orders` for equities and options, differentiated by `orderStrategyType` + `orderLegCollection`.
 - **Streaming:** WS URL from `GET /trader/v1/userPreference`; services `LEVELONE_EQUITIES`, `LEVELONE_OPTIONS`, `ACCT_ACTIVITY`.
 - **Order status:** REST is poll-only; use ACCT_ACTIVITY stream for real-time fills.
+
+### Webull OpenAPI (research data provider, read-only)
+
+- **Hosts:** `api.webull.com` (production), `api.sandbox.webull.com` (sandbox, 15-minute delayed)
+- **Auth:** HMAC-SHA256 request signing with `WEBULL_APP_KEY` / `WEBULL_APP_SECRET`, plus a 2FA access token (`/openapi/config`, `/auth/tokens/create`, `/auth/tokens/check`) cached at `data/webull-token.json`. Signer verified against the official Python SDK; `npm run research:selftest` must pass.
+- **Endpoints used:** `/market-data/stocks/snapshots/list`, `/market-data/stocks/bars/list`, `/market-data/screeners/gainers-losers/list`, `/market-data/screeners/top-actives/list`, `/trading/instruments/options/contracts/list`, `/market-data/options/snapshots/list`, `/market-data/fundamentals/earnings-calendars/list`. Full table in `docs/research-engine.md`.
+- **Entitlements:** stock/ETF data needs a non-display OpenAPI market data subscription; options need OPRA Real-Time Non-display. Rate limit 300 req/min; option snapshots 20 symbols per call, 60 calls/min.
+- Gecko never sends orders through Webull. If a response shape differs from what `providers/webull/types.ts` expects, the provider logs the raw keys; fix the parser, do not guess.
+
+### Cboe delayed quotes (free research fallback)
+
+- `https://cdn.cboe.com/api/global/delayed_quotes/options/{SYMBOL}.json`: 15-minute delayed snapshot of the underlying and its full option chain with IV and Greeks. After the close it holds the last regular-session marks. Never use it for entry pricing.
 
 ### Anthropic Claude API (intelligence layer)
 
@@ -277,7 +303,8 @@ No database. Append-only JSONL under `data/` (gitignored):
 - `data/trades.jsonl` -- every executed trade
 - `data/outcomes.jsonl` -- closed positions with full P&L attribution
 - `data/llm-classifications.jsonl` -- LLM scores for post-hoc analysis
-- `data/ibkr-tokens.json` / `data/oauth-tokens.json` -- session/auth tokens (mode 0600, never logged, never committed)
+- `data/ibkr-tokens.json` / `data/oauth-tokens.json` / `data/webull-token.json` -- session/auth tokens (mode 0600, never logged, never committed)
+- `data/research/` -- research packets (JSON + Markdown per run, `packets.jsonl` index)
 
 ## Testing
 
