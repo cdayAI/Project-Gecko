@@ -49,6 +49,16 @@ function validateLogLevel(val: string): LogLevel {
   return val as LogLevel;
 }
 
+function validateWebullEnv(val: string): "prod" | "sandbox" {
+  if (val === "prod" || val === "sandbox") return val;
+  throw new Error(`WEBULL_ENV must be 'prod' or 'sandbox', got: ${val}`);
+}
+
+function validateResearchProvider(val: string): "cboe" | "webull" | "schwab" {
+  if (val === "cboe" || val === "webull" || val === "schwab") return val;
+  throw new Error(`RESEARCH_PROVIDER must be 'cboe', 'webull', or 'schwab', got: ${val}`);
+}
+
 function validateBroker(val: string): "schwab" | "ibkr" {
   if (val === "schwab" || val === "ibkr") return val;
   throw new Error(`BROKER must be 'schwab' or 'ibkr', got: ${val}`);
@@ -69,6 +79,16 @@ export function loadConfig(): AppConfig {
 
     // IBKR
     ibkrBaseUrl: optional("IBKR_BASE_URL", "https://localhost:5000/v1/api"),
+
+    // Webull OpenAPI (research data; never used for orders)
+    webullAppKey: optional("WEBULL_APP_KEY", ""),
+    webullAppSecret: optional("WEBULL_APP_SECRET", ""),
+    webullEnv: validateWebullEnv(optional("WEBULL_ENV", "sandbox")),
+
+    // Research engine
+    researchProvider: validateResearchProvider(optional("RESEARCH_PROVIDER", "cboe")),
+    researchAccountEquity: boundedNumber("RESEARCH_ACCOUNT_EQUITY", 5000, 100, 100_000_000),
+    researchMaxRiskPct: boundedNumber("RESEARCH_MAX_RISK_PCT", 2.0, 0.1, 10.0),
 
     // LLM
     anthropicApiKey: optional("ANTHROPIC_API_KEY", ""),

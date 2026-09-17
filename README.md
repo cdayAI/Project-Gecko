@@ -70,6 +70,8 @@ The session token is written to `data/ibkr-tokens.json` (gitignored) and kept al
 | `npm run stress` | Failure-mode stress tests |
 | `npm run report` | End-of-day P&L attribution report |
 | `npm run trace` | Signal-by-signal audit trail |
+| `npm run research` | Build a research packet (quotes, stats, headlines, option structures) for a symbol list or the movers universe; read-only |
+| `npm run research:selftest` | Verify the Webull request signer against official SDK vectors |
 
 ## Architecture
 
@@ -78,6 +80,7 @@ src/
   core/           # Config, structured JSON logger, shared types
   brokers/        # Broker-agnostic interface; IBKR (primary) + Schwab (legacy)
   data/           # Historical bars, quote cache, Yahoo fallback
+  research/       # Pre-trade research engine: providers (Cboe delayed, Webull, Schwab), scanner, option analyzer, packets
   scanner/        # Premarket gap scanner, 0DTE option chain monitor
   intelligence/   # Agent brain, LLM classifier, self-tuner, regime/breadth/news
   strategies/     # ORB, 0DTE SPY, mean reversion, earnings, pairs
