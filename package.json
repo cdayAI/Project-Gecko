@@ -39,6 +39,10 @@
     "backtest:manual-test": "node --import tsx src/backtest/manual-backtest-selftest.ts",
     "backtest:options": "node --import tsx src/backtest/manual-options-replay-cli.ts",
     "backtest:options-test": "node --import tsx src/backtest/manual-options-selftest.ts",
+    "research:edge": "node --import tsx src/backtest/research-campaign-cli.ts",
+    "research:edge-test": "node --import tsx src/backtest/edge-selftest.ts",
+    "research:statistics-test": "node --import tsx src/backtest/research-statistics-selftest.ts",
+    "research:coverage-test": "node --import tsx src/backtest/research-coverage-selftest.ts",
     "news": "node --import tsx src/research/news/news-cli.ts",
     "news:selftest": "node --import tsx src/research/news/news-selftest.ts"
   },

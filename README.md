@@ -4,6 +4,10 @@ Gecko's current development path is a **manual options research desk**: attribut
 
 Start with [the manual desk guide](docs/manual-trading-desk.md), [news collection](docs/news-pipeline.md), and [backtesting evidence](docs/manual-backtesting.md). The initial simple underlying ORB diagnostic lost money after its declared costs in both discovery and holdout; no profitable options strategy is established. Live TypeScript Webull qualification and historical options evidence remain external work.
 
+The [research mandate](docs/RESEARCH_MANDATE.md) governs further work. The frozen four-family campaign (`npm run research:edge -- --prepare`, then `--run=<saved-directory>`) compares eight symbols with conservative fills and costs, retains every failed hypothesis, and never calls stock returns options profits. [Historical options acquisition evidence](docs/historical-options-data.md) documents a successfully retrieved public sample and the remaining data requirements.
+
+The [September 17 four-family result](docs/edge-screen-results-2026-09-17.md) rejected every tested hypothesis after costs. This is exploratory underlying evidence, not options P&L; 229 passing software checks do not change that result.
+
 ```sh
 npm ci --ignore-scripts
 npm run build
