@@ -43,6 +43,10 @@
     "research:edge-test": "node --import tsx src/backtest/edge-selftest.ts",
     "research:statistics-test": "node --import tsx src/backtest/research-statistics-selftest.ts",
     "research:coverage-test": "node --import tsx src/backtest/research-coverage-selftest.ts",
+    "research:value": "node --import tsx src/research/valuation-cli.ts",
+    "research:value-history-test": "node --import tsx src/research/valuation-history-selftest.ts",
+    "research:value-pricing-test": "node --import tsx src/research/valuation-pricing-selftest.ts",
+    "research:value-calibration-test": "node --import tsx src/research/valuation-calibration-selftest.ts",
     "news": "node --import tsx src/research/news/news-cli.ts",
     "news:selftest": "node --import tsx src/research/news/news-selftest.ts"
   },

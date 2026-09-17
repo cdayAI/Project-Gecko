@@ -8,6 +8,8 @@ The [research mandate](docs/RESEARCH_MANDATE.md) governs further work. The froze
 
 The [September 17 four-family result](docs/edge-screen-results-2026-09-17.md) rejected every tested hypothesis after costs. This is exploratory underlying evidence, not options P&L; 229 passing software checks do not change that result.
 
+[Current-option valuation research](docs/option-valuation-results-2026-09-17.md) now compares actual delayed option premiums with historical expiry-payoff scenarios and audits the underlying forecast through rolling tests. It identified three preliminary price leads, but weak forecast calibration, cost/risk limits and data gaps prevent trade qualification. `npm run research:value -- --replay=<saved-study-directory>` reproduces the saved experiment.
+
 ```sh
 npm ci --ignore-scripts
 npm run build

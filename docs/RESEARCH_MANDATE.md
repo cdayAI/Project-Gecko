@@ -17,6 +17,14 @@ Use the existing project, a $5,000 planning account and manual execution. Own ro
 9. Keep entry and exit logic deterministic and fast. Use language models for source interpretation and challenge, not for fabricated real-time prices or uncalibrated sizing scores.
 10. End each research cycle with results, rejected hypotheses, the next frozen experiment and any specific external prerequisite. Do the authorized work before reporting a blocker. Do not substitute another generic planning conversation for research.
 
+## What makes an options thesis worth testing
+
+State a concrete mechanism: a change in guidance, delayed interpretation of verified news, a relative-value discrepancy, or a demonstrated return distribution that differs economically from the quoted premium. "The stock moves a lot" and technical indicator agreement are insufficient on their own.
+
+Keep three claims separate: the underlying forecast, the option payoff valuation, and executable trading profit. Test a more complex forecast against a simple baseline on historical dates using only outcomes matured before each forecast. Report failed calibration and missing tails. Compare actual premiums with the proposed payoff distribution and preserve disagreement between models. A low debit or attractive maximum payout does not establish positive expectancy.
+
+Current option quotes mapped to historical underlying returns are scenario valuation. They are not historical option returns, an arbitrage-free price or calibrated win probabilities. Exact expiry horizon, corporate actions and physical settlement matter. Terminal payoff mathematics cannot justify an earlier exit price or unmanaged expiration in a small account. A positive model price relationship is a research lead until pricing, forecast and execution evidence all support the claim.
+
 ## Evidence status
 
 - Exploratory: observed or retrospectively selected data. Useful for rejecting ideas and identifying what merits further testing.

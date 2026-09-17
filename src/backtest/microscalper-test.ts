@@ -5,9 +5,9 @@
 //   2. After such a deviation, what fraction revert to VWAP within 10 min?
 //   3. What's the average move size to reversion vs against?
 //
-// This is the cleanest test of the strategy's core signal without
-// any leverage layer. If the equity signal doesn't have an edge,
-// the option layer cannot save it.
+// LEGACY UNQUALIFIED ILLUSTRATION: overlapping signals, favorable intrabar
+// ordering and extrema-derived timeout P&L prevent an executable portfolio
+// interpretation. Delta/theta approximations are not historical option fills.
 
 import { YahooHistoricalBars } from "../data/yahoo-historical.js";
 import { etParts } from "../utils/time.js";
