@@ -4,9 +4,9 @@
 // 2026-09-16 through Webull's own data tools (same OpenAPI backend) and
 // match the documented snapshot example on
 // developer.webull.com/apis/docs/market-data-api/data-api. Numeric fields
-// arrive as strings. Option snapshot and contract shapes have NOT been
-// observed live yet (OPRA entitlement required); those are validated
-// loosely and the raw keys are logged on first use.
+// arrive as strings. Option snapshot/reference shapes were observed in
+// authenticated sandbox HTTP-200 responses on 2026-09-17; parsers preserve
+// source times and delay metadata independently of the host environment.
 
 export interface WebullStockSnapshotRaw {
   readonly symbol?: string;
@@ -22,6 +22,7 @@ export interface WebullStockSnapshotRaw {
   readonly change_ratio?: string;
   readonly last_trade_time?: number;
   readonly quote_time?: number;
+  readonly delay_minutes?: number;
   readonly bid?: string;
   readonly ask?: string;
   readonly bid_size?: string;

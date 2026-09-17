@@ -20,10 +20,8 @@ export function createResearchProvider(config: AppConfig, override?: string): Ma
       return new CboeDelayedProvider();
     case "webull": {
       const client = new WebullClient({ appKey: config.webullAppKey, appSecret: config.webullAppSecret, env: config.webullEnv });
-      // Sandbox is delayed by default; production is only real-time with a
-      // subscription, which we cannot detect, so mark it unknown-not-delayed
-      // and rely on the operator to confirm entitlements.
-      return new WebullProvider(client, config.webullEnv === "sandbox");
+      // Delay is a property of each response, not of the hostname.
+      return new WebullProvider(client);
     }
     case "schwab": {
       if (!config.schwabClientId || !config.schwabClientSecret) {

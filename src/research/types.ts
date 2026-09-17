@@ -20,6 +20,7 @@ export interface Provenance {
   readonly sourceTimestamp?: number;    // Unix ms, timestamp reported by the source
   readonly delayed: boolean;            // true if the source is known to be delayed
   readonly delayMinutes?: number;
+  readonly delayStatus?: "real-time" | "delayed" | "unknown";
   readonly note?: string;               // e.g. "after-close snapshot", "IEX only"
 }
 
@@ -30,6 +31,10 @@ export interface UnderlyingSnapshot {
   readonly last: number;
   readonly bid: number;
   readonly ask: number;
+  readonly bidSize?: number;
+  readonly askSize?: number;
+  readonly quoteTime?: number;
+  readonly lastTradeTime?: number;
   readonly open: number;
   readonly high: number;
   readonly low: number;
@@ -71,6 +76,14 @@ export interface OptionQuote {
   readonly optionType: OptionType;
   readonly bid: number;
   readonly ask: number;
+  readonly bidSize?: number;
+  readonly askSize?: number;
+  readonly quoteTime?: number;
+  readonly lastTradeTime?: number;
+  readonly provenance?: Provenance;
+  readonly contractVerified?: boolean;
+  readonly contractMultiplier?: number;
+  readonly contractStandard?: boolean;
   readonly last: number;
   readonly volume: number;
   readonly openInterest: number;
@@ -87,6 +100,13 @@ export interface OptionChainSnapshot {
   readonly expirations: readonly string[];
   readonly contracts: readonly OptionQuote[];
   readonly provenance: Provenance;
+  readonly underlyingSnapshot?: UnderlyingSnapshot;
+  readonly completeness?: {
+    readonly discovery: "bounded" | "unknown";
+    readonly quotesComplete: boolean;
+    readonly requested: number;
+    readonly returned: number;
+  };
 }
 
 export type StructureKind = "long-call" | "long-put" | "call-debit-spread" | "put-debit-spread";

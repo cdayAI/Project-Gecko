@@ -1,6 +1,18 @@
 # Gecko
 
-An automated day-trading bot for US equities and short-dated (0DTE) options, written in TypeScript. It trades through the Interactive Brokers Client Portal Web API (with a legacy Charles Schwab Trader API client as fallback) and uses Anthropic's Claude API as an intelligence layer to score premarket setups and validate every trade before submission.
+Gecko's current development path is a **manual options research desk**: attributed news, qualified Webull quotes, conditional local alerts, actual-fill journaling and reproducible strategy diagnostics. The operator makes all trading decisions and executes manually. `npm run dev` and `npm start` now enter this data-only desk.
+
+Start with [the manual desk guide](docs/manual-trading-desk.md), [news collection](docs/news-pipeline.md), and [backtesting evidence](docs/manual-backtesting.md). The initial simple underlying ORB diagnostic lost money after its declared costs in both discovery and holdout; no profitable options strategy is established. Live TypeScript Webull qualification and historical options evidence remain external work.
+
+```sh
+npm ci --ignore-scripts
+npm run build
+npm run desk -- --doctor
+npm run desk:demo
+npm run backtest:manual
+```
+
+The older automated stock/0DTE system remains below for reference, with `legacy:dev` and `legacy:start` entry points. Its reconciliation and hard-risk gaps have not been cleared by the manual-desk checks. The legacy deployment configuration still targets that older application; use the separate manual runbook.
 
 > ## Disclaimer: use at your own risk
 >
@@ -40,7 +52,7 @@ cp .env.example .env
 # Edit .env: set BROKER, ANTHROPIC_API_KEY, and keep LIVE_TRADING=false
 
 npm run build
-npm run dev
+npm run legacy:dev
 ```
 
 With `LIVE_TRADING=false` the bot runs the full pipeline (scanning, signals, risk checks, brain validation) and logs what it *would* do without submitting any orders. Keep it that way until you have validated the system end to end.

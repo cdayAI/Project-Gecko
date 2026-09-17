@@ -6,9 +6,9 @@
 //     subscription (Nasdaq Basic or TotalView, non-display). Sandbox returns
 //     15-minute delayed data by default.
 //   - US option snapshots/bars/ticks: requires OPRA Real-Time Non-display.
-//     20 symbols per call, 60 requests/minute (SDK sample comments).
+//     20 symbols per call; sandbox30/min and production60/min per endpoint.
 //   - Option contract discovery: /trading/instruments/options/contracts/list
-//     (SDK GetOptionContractsRequestV2). Response shape not yet observed.
+//     (SDK GetOptionContractsRequestV2). Reference and option shapes observed on 2026-09-17.
 //   - Screeners: /market-data/screeners/gainers-losers/list and
 //     /market-data/screeners/top-actives/list (SDK v2 requests).
 //   - Earnings calendar: /market-data/fundamentals/earnings-calendars/list.
@@ -34,32 +34,20 @@ const ETF_HINT = new Set(["SPY", "QQQ", "IWM", "DIA", "XLF", "XLE", "XLK", "XLU"
 
 export class WebullProvider implements MarketDataProvider {
   readonly name = "webull";
-  private optionShapeLogged = false;
+  private readonly references = new Map<string, WebullContractReference>();
 
-  constructor(private readonly client: WebullClient, private readonly delayedHint: boolean) {}
+  constructor(private readonly client: WebullClient, _legacyDelayedHint?: boolean) {}
 
   async getSnapshots(symbols: readonly string[]): Promise<readonly UnderlyingSnapshot[]> {
     const out: UnderlyingSnapshot[] = [];
-    // Category is required and ETFs must be queried as US_ETF. Split by a
-    // hint list; unknown symbols default to US_STOCK and are retried as
-    // US_ETF if they come back empty.
-    const stocks = symbols.filter((s) => !ETF_HINT.has(s.toUpperCase()));
-    const etfs = symbols.filter((s) => ETF_HINT.has(s.toUpperCase()));
-    const missing: string[] = [];
-    for (const [category, list] of [["US_STOCK", stocks], ["US_ETF", etfs]] as const) {
-      for (let i = 0; i < list.length; i += 100) {
-        const chunk = list.slice(i, i + 100);
-        if (chunk.length === 0) continue;
-        const rows = await this.fetchSnapshots(chunk, category);
-        const got = new Set(rows.map((r) => r.symbol));
-        for (const s of chunk) if (!got.has(s.toUpperCase())) missing.push(s);
-        out.push(...rows);
-      }
-    }
-    if (missing.length > 0) {
-      const retryCategory = "US_ETF";
-      const rows = await this.fetchSnapshots(missing, retryCategory);
-      out.push(...rows);
+    // The observed successful non-display request used US_STOCK for both
+    // equities and ETFs. Do not substitute an unqualified category on errors.
+    const normalized = [...new Set(symbols.map(s => s.toUpperCase()))];
+    if (normalized.some(s => !/^[A-Z][A-Z0-9.-]{0,14}$/.test(s))) throw new Error("Invalid underlying symbol");
+    for (let i = 0; i < normalized.length; i += 100) {
+      const chunk = normalized.slice(i, i + 100);
+      const rows = await this.fetchSnapshots(chunk, "US_STOCK");
+      out.push(...rows.filter(row => chunk.includes(row.symbol)));
     }
     return out;
   }
@@ -83,6 +71,7 @@ export class WebullProvider implements MarketDataProvider {
     const capturedAt = Date.now();
     const out: UnderlyingSnapshot[] = [];
     for (const row of raw as WebullStockSnapshotRaw[]) {
+      if (!record(row)) continue;
       const snap = this.toSnapshot(row, capturedAt);
       if (snap) out.push(snap);
     }
@@ -98,8 +87,8 @@ export class WebullProvider implements MarketDataProvider {
     const provenance: Provenance = {
       source: "webull",
       capturedAt,
-      sourceTimestamp: typeof r.quote_time === "number" ? r.quote_time : (typeof r.last_trade_time === "number" ? r.last_trade_time : undefined),
-      delayed: this.delayedHint,
+      sourceTimestamp: integer(r.quote_time),
+      ...delayMetadata(r.delay_minutes),
       note: r.trade_status ? `trade_status=${r.trade_status}` : undefined,
     };
     return {
@@ -107,6 +96,10 @@ export class WebullProvider implements MarketDataProvider {
       last,
       bid: num(r.bid) ?? 0,
       ask: num(r.ask) ?? 0,
+      bidSize: num(r.bid_size) ?? undefined,
+      askSize: num(r.ask_size) ?? undefined,
+      quoteTime: integer(r.quote_time),
+      lastTradeTime: integer(r.last_trade_time),
       open: num(r.open) ?? 0,
       high: num(r.high) ?? 0,
       low: num(r.low) ?? 0,
@@ -196,76 +189,84 @@ export class WebullProvider implements MarketDataProvider {
     return out.slice(0, limit);
   }
 
-  // Webull has no chain endpoint. Discover contracts, then quote them in
-  // batches of 20. Both calls need entitlements we have not exercised yet,
-  // so the response shape is validated loosely and logged once.
+  // Exact reference discovery is the preferred startup path for a manual
+  // monitor. It does not rely on a complete or correctly ordered full chain.
+  async getContractReferences(symbols: readonly string[]): Promise<readonly string[]> {
+    const selected = validateSymbols(symbols);
+    for (const symbol of selected) this.references.delete(symbol);
+    const verified: string[] = [];
+    for (let i = 0; i < selected.length; i += 20) {
+      const chunk = selected.slice(i, i + 20);
+      const raw = await this.client.get<unknown>("/trading/instruments/options/contracts/list",
+        { category: "US_OPTION", option_symbols: chunk.join(",") });
+      for (const ref of parseWebullContractReferences(raw, Date.now())) {
+        if (chunk.includes(ref.symbol)) {
+          this.references.set(ref.symbol, ref);
+          if (ref.verified) verified.push(ref.symbol);
+        }
+      }
+    }
+    return verified;
+  }
+
+  async getOptionQuotes(symbols: readonly string[]): Promise<readonly OptionQuote[]> {
+    const selected = validateSymbols(symbols);
+    const output: OptionQuote[] = [];
+    for (let i = 0; i < selected.length; i += 20) {
+      const chunk = selected.slice(i, i + 20);
+      const raw = await this.client.get<unknown>("/market-data/options/snapshots/list",
+        { symbols: chunk.join(","), category: "US_OPTION" });
+      const quotes = parseWebullOptionSnapshots(raw, Date.now(), this.references);
+      const seen = new Set<string>();
+      for (const quote of quotes) {
+        if (!chunk.includes(quote.osiSymbol) || seen.has(quote.osiSymbol)) {
+          throw new Error("Webull option response contained unexpected or duplicate symbols");
+        }
+        seen.add(quote.osiSymbol);
+        output.push(quote);
+      }
+    }
+    return output;
+  }
+
+  // Discovery is bounded and never represented as a complete market chain.
+  // For known contracts, use getContractReferences + getOptionQuotes instead.
   async getOptionChain(req: ChainRequest): Promise<OptionChainSnapshot | null> {
     const underlying = req.underlying.toUpperCase();
-    const spot = await this.getSnapshots([underlying]);
-    const underlyingPrice = spot[0]?.last ?? 0;
-    if (underlyingPrice <= 0) {
-      log.warn("Option chain: no underlying price", { underlying });
-      return null;
+    if (!/^[A-Z]{1,6}$/.test(underlying) || !validDate(req.fromDate) || !validDate(req.toDate)
+      || req.fromDate > req.toDate || Date.parse(req.toDate) - Date.parse(req.fromDate) > 90 * 86_400_000) {
+      throw new Error("Invalid or unbounded Webull chain request");
     }
-    let contracts: unknown;
+    const window = req.strikesAroundSpot ?? 12;
+    if (!Number.isSafeInteger(window) || window < 1 || window > 20) throw new Error("Invalid strike window");
+    const spot = await this.getSnapshots([underlying]);
+    const underlyingSnapshot = spot.find((row) => row.symbol === underlying);
+    if (!underlyingSnapshot) return null;
+    let raw: unknown;
     try {
-      contracts = await this.client.get<unknown>("/trading/instruments/options/contracts/list", {
-        category: "US_OPTION",
-        underlying_symbols: underlying,
-        status: "LISTING",
-        end_date: req.fromDate,
-        start_date: req.toDate,
+      raw = await this.client.get<unknown>("/trading/instruments/options/contracts/list", {
+        category: "US_OPTION", underlying_symbols: underlying, root_symbol: underlying,
+        status: "LISTING", end_date: req.fromDate, start_date: req.toDate,
       });
     } catch (err) {
-      log.warn("Option contract discovery failed (entitlement or shape)", { underlying, error: errMsg(err) });
+      log.warn("Bounded option discovery failed", { underlying, error: errMsg(err) });
       return null;
     }
-    const osiList = extractOsiSymbols(contracts, underlying);
-    if (osiList.length === 0) {
-      log.warn("Option contract discovery returned no recognizable symbols", { underlying, topLevelKeys: keysOf(contracts) });
-      return null;
-    }
-    // Keep strikes near spot to respect the 20-per-call quote limit.
-    const parsed = osiList.map((osi) => ({ osi, p: parseOsi(osi) })).filter((x) => x.p !== null && x.p.expiration >= req.fromDate && x.p.expiration <= req.toDate);
-    const window = req.strikesAroundSpot ?? 12;
-    const byExp = new Map<string, { osi: string; strike: number }[]>();
-    for (const x of parsed) {
-      const arr = byExp.get(x.p!.expiration) ?? [];
-      arr.push({ osi: x.osi, strike: x.p!.strike });
-      byExp.set(x.p!.expiration, arr);
-    }
-    const toQuote: string[] = [];
-    for (const arr of byExp.values()) {
-      const strikes = [...new Set(arr.map((a) => a.strike))].sort((a, b) => a - b);
-      const nearest = strikes.map((k) => ({ k, d: Math.abs(k - underlyingPrice) })).sort((a, b) => a.d - b.d).slice(0, window * 2).map((s) => s.k);
-      const keep = new Set(nearest);
-      for (const a of arr) if (keep.has(a.strike)) toQuote.push(a.osi);
-    }
-    const quotes: OptionQuote[] = [];
-    const capturedAt = Date.now();
-    for (let i = 0; i < toQuote.length; i += 20) {
-      const chunk = toQuote.slice(i, i + 20);
-      let raw: unknown;
-      try {
-        raw = await this.client.get<unknown>("/market-data/options/snapshots/list", { symbols: chunk.join(","), category: "US_OPTION" });
-      } catch (err) {
-        log.warn("Option snapshot request failed (OPRA entitlement?)", { underlying, error: errMsg(err) });
-        return null;
-      }
-      if (!this.optionShapeLogged) {
-        this.optionShapeLogged = true;
-        log.info("Option snapshot raw shape (first call)", { topLevelKeys: keysOf(raw), sample: JSON.stringify(raw).slice(0, 600) });
-      }
-      for (const q of extractOptionQuotes(raw, underlying)) quotes.push(q);
-    }
-    if (quotes.length === 0) return null;
-    const expirations = [...new Set(quotes.map((q) => q.expiration))].sort();
+    const refs = parseWebullContractReferences(raw, Date.now()).filter((ref) =>
+      ref.underlying === underlying && ref.expiration >= req.fromDate && ref.expiration <= req.toDate);
+    for (const ref of refs) this.references.set(ref.symbol, ref);
+    const selected = refs.sort((a, b) => Math.abs(a.strike - underlyingSnapshot.last) - Math.abs(b.strike - underlyingSnapshot.last)
+      || a.expiration.localeCompare(b.expiration)).slice(0, Math.min(40, window * 4)).map((ref) => ref.symbol);
+    if (!selected.length) return null;
+    const quotes = await this.getOptionQuotes(selected);
     return {
-      underlying,
-      underlyingPrice,
-      expirations,
-      contracts: quotes,
-      provenance: { source: "webull", capturedAt, delayed: this.delayedHint, note: "option snapshot shape validated loosely; confirm on first live run" },
+      underlying, underlyingPrice: underlyingSnapshot.last, underlyingSnapshot,
+      expirations: [...new Set(quotes.map((q) => q.expiration))].sort(), contracts: quotes,
+      provenance: { source: "webull", capturedAt: Date.now(), delayed: quotes.some((q) => q.provenance?.delayed === true),
+        delayStatus: quotes.length > 0 && quotes.every((q) => q.provenance?.delayMinutes === 0) ? "real-time" : "unknown",
+        note: "Bounded discovery; pagination and date-range completeness not qualified. Use per-contract timestamps." },
+      completeness: { discovery: "bounded", quotesComplete: quotes.length === selected.length,
+        requested: selected.length, returned: quotes.length },
     };
   }
 
@@ -287,69 +288,93 @@ export class WebullProvider implements MarketDataProvider {
   }
 }
 
-// Pull OCC symbols out of an unknown-shaped contract list response. We
-// look for any string field that parses as an OCC compact symbol for the
-// underlying, at any depth up to 3 levels.
-function extractOsiSymbols(raw: unknown, underlying: string): string[] {
-  const found = new Set<string>();
-  const visit = (v: unknown, depth: number): void => {
-    if (depth > 3 || v === null || v === undefined) return;
-    if (typeof v === "string") {
-      const p = parseOsi(v);
-      if (p && p.underlying === underlying) found.add(v);
-      return;
-    }
-    if (Array.isArray(v)) { for (const x of v) visit(x, depth + 1); return; }
-    if (typeof v === "object") { for (const x of Object.values(v as Record<string, unknown>)) visit(x, depth + 1); }
-  };
-  visit(raw, 0);
-  return [...found];
+export interface WebullContractReference {
+  readonly symbol: string;
+  readonly underlying: string;
+  readonly expiration: string;
+  readonly strike: number;
+  readonly multiplier: number | null;
+  readonly standard: boolean;
+  readonly verified: boolean;
+  readonly capturedAt: number;
 }
 
-function extractOptionQuotes(raw: unknown, underlying: string): OptionQuote[] {
-  const rows: unknown[] = Array.isArray(raw) ? raw : (typeof raw === "object" && raw !== null && Array.isArray((raw as { data?: unknown }).data) ? ((raw as { data: unknown[] }).data) : []);
-  const out: OptionQuote[] = [];
-  for (const r of rows) {
-    if (typeof r !== "object" || r === null) continue;
-    const o = r as Record<string, unknown>;
-    const osi = typeof o.symbol === "string" ? o.symbol : null;
-    const p = osi ? parseOsi(osi) : null;
-    if (!osi || !p || p.underlying !== underlying) continue;
-    const bid = num(o.bid), ask = num(o.ask), last = num(o.price) ?? num(o.last) ?? num(o.close);
-    out.push({
-      osiSymbol: osi,
-      underlying,
-      expiration: p.expiration,
-      strike: p.strike,
-      optionType: p.optionType,
-      bid: bid ?? 0,
-      ask: ask ?? 0,
-      last: last ?? 0,
-      volume: num(o.volume) ?? 0,
-      openInterest: num(o.open_interest) ?? num(o.openInterest) ?? 0,
-      iv: num(o.implied_volatility) ?? num(o.iv),
-      delta: num(o.delta),
-      gamma: num(o.gamma),
-      theta: num(o.theta),
-      vega: num(o.vega),
+function record(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function validDate(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value))
+    && new Date(value).toISOString().slice(0, 10) === value;
+}
+function integer(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : undefined;
+}
+function delayMetadata(value: unknown): Pick<Provenance, "delayed" | "delayStatus" | "delayMinutes"> {
+  const delay = typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+  return { delayMinutes: delay, delayed: delay !== undefined && delay > 0,
+    delayStatus: delay === undefined ? "unknown" : delay === 0 ? "real-time" : "delayed" };
+}
+function validateSymbols(symbols: readonly string[]): string[] {
+  if (!Array.isArray(symbols) || !symbols.length || symbols.length > 40
+    || symbols.some((symbol) => typeof symbol !== "string" || !parseOsi(symbol))) throw new Error("Expected 1-40 exact OSI symbols");
+  return [...new Set(symbols)];
+}
+
+export function parseWebullContractReferences(raw: unknown, capturedAt: number): WebullContractReference[] {
+  if (!record(raw) || !Array.isArray(raw.data) || raw.data.length > 2000) throw new Error("Invalid Webull option reference wrapper or unbounded result");
+  const seen = new Set<string>();
+  const output: WebullContractReference[] = [];
+  for (const row of raw.data) {
+    if (!record(row) || typeof row.symbol !== "string") throw new Error("Invalid Webull option reference row");
+    const parsed = parseOsi(row.symbol);
+    if (!parsed || !validDate(parsed.expiration) || seen.has(row.symbol)) throw new Error("Invalid or duplicate Webull contract identity");
+    seen.add(row.symbol);
+    const multiplier = num(row.multiplier);
+    const standard = row.def_type === "STANDARD";
+    const verified = standard && multiplier === 100 && row.underlying_symbol === parsed.underlying
+      && row.root_symbol === parsed.underlying && row.expiration_date === parsed.expiration
+      && row.option_type === parsed.optionType && num(row.strike_price) === parsed.strike
+      && row.status === "LISTING" && row.tradable_status === "OC"
+      && row.currency === "USD" && row.style === "AMERICAN" && row.settlement_method === "PHYSICAL";
+    output.push({ symbol: row.symbol, underlying: parsed.underlying, expiration: parsed.expiration,
+      strike: parsed.strike, multiplier, standard, verified, capturedAt });
+  }
+  return output;
+}
+
+export function parseWebullOptionSnapshots(raw: unknown, capturedAt: number,
+  references: ReadonlyMap<string, WebullContractReference> = new Map()): OptionQuote[] {
+  const rows: unknown[] | null = Array.isArray(raw) ? raw : record(raw) && Array.isArray(raw.data) ? raw.data : null;
+  if (!rows || rows.length > 20) throw new Error("Invalid Webull option snapshot wrapper or batch size");
+  const output: OptionQuote[] = [];
+  for (const row of rows) {
+    if (!record(row) || typeof row.symbol !== "string") throw new Error("Invalid Webull option snapshot row");
+    const parsed = parseOsi(row.symbol);
+    if (!parsed || !validDate(parsed.expiration)) throw new Error("Invalid Webull option snapshot identity");
+    const ref = references.get(row.symbol);
+    output.push({
+      osiSymbol: row.symbol, underlying: parsed.underlying, expiration: parsed.expiration,
+      strike: parsed.strike, optionType: parsed.optionType,
+      bid: num(row.bid) ?? NaN, ask: num(row.ask) ?? NaN, last: num(row.price) ?? NaN,
+      bidSize: num(row.bid_size) ?? undefined, askSize: num(row.ask_size) ?? undefined,
+      quoteTime: integer(row.quote_time), lastTradeTime: integer(row.last_trade_time),
+      provenance: { source: "webull", capturedAt, sourceTimestamp: integer(row.quote_time), ...delayMetadata(row.delay_minutes) },
+      contractVerified: ref?.verified === true && capturedAt >= ref.capturedAt && capturedAt - ref.capturedAt <= 86_400_000,
+      contractStandard: ref?.standard, contractMultiplier: ref?.multiplier ?? undefined,
+      volume: num(row.volume) ?? NaN, openInterest: num(row.open_interest) ?? NaN,
+      iv: num(row.imp_vol), delta: num(row.delta), gamma: num(row.gamma),
+      theta: num(row.theta), vega: num(row.vega),
     });
   }
-  return out;
+  return output;
 }
 
-function keysOf(v: unknown): string[] {
-  return typeof v === "object" && v !== null ? Object.keys(v as object).slice(0, 12) : [typeof v];
-}
-
-function num(v: unknown): number | null {
-  if (typeof v === "number") return Number.isFinite(v) ? v : null;
-  if (typeof v === "string" && v.trim() !== "") {
-    const n = Number(v);
-    return Number.isFinite(n) ? n : null;
+function num(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
 }
-
-function errMsg(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
+function errMsg(error: unknown): string { return error instanceof Error ? error.message : String(error); }
