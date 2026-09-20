@@ -146,3 +146,34 @@ LUNR failed gap (puts have 35% spread drag, skip); AAPL rejected its
 Record each plan as: no trigger / triggered and filled (price, qty) /
 triggered and not filled / cancelled, then exit price and reason. Net of
 fees. Review Friday 09-25 after the close.
+
+## News and Jev check (added 2026-09-20 ~19:40 UTC, still before the session)
+
+Catalyst found by reading, not by the pipeline: the SEC approved a
+five-year "Innovation Exemption" on 2026-09-18 permitting 24/7 tokenized
+stock trading, effective immediately (Insider Monkey via Yahoo,
+2026-09-18 23:06Z). That, plus bitcoin's +5.7% day, is what moved HOOD,
+COIN and MSTR on Friday. Robinhood and Coinbase are direct beneficiaries
+of tokenized trading, which strengthens the basis for plan 1 beyond pure
+crypto beta. Related event: CoinDesk Policy and Regulation conference on
+Tuesday 2026-09-22 with SEC officials and legislators; plan 1's Tuesday
+time exit sits on top of it, so treat Tuesday headlines as a live risk
+and a potential extension trigger, not noise.
+
+Also noted: Investor's Business Daily (2026-09-20 17:04Z) lists HOOD and
+AMD as "surging into buy areas" (crowded, more follow-through
+participants); Musk said NVIDIA chips go to space with SpaceX next year
+(2026-09-20 16:20Z, retail-positive, a countercase to plan 3); Meta's
+Stilla.ai business-agent deal narrative (countercase to plan 5).
+
+Jev (jev-1.13.0, prompt gecko-evidence-v1) classified all 11 attributed
+Yahoo headlines collected for HOOD, AMD, SPCX, NCLH, META, COIN, MSTR over
+the prior 48 hours: 11/11 succeeded, 15,439 input tokens, about $0.0006.
+Nine are commentary; none show a management guidance change, explicit
+dilution, or a definitive commercial agreement; all are headline-only
+evidence. Non-commentary tags: SPCX/NVIDIA item "contract" (0.41), META
+Stilla.ai "corporate_action" (0.54). The SEC exemption item was not in
+the symbol-tagged headline set, so the pipeline did not see the week's
+main catalyst: the collector needs primary sources and article bodies
+before Jev output can be relied on for catalyst discovery. Full report:
+`docs/jev/monday-2026-09-21/review.md`. No plan levels were changed.
