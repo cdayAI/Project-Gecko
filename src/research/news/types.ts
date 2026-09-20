@@ -1,5 +1,6 @@
 // Source text is untrusted evidence. No event in this module authorizes a trade.
-export type NewsSource = "yahoo" | "sec" | "x" | "benzinga";
+// `primary` is curated direct issuer/official-source intake, not a subscription adapter.
+export type NewsSource = "yahoo" | "sec" | "x" | "benzinga" | "primary";
 export type ClaimStatus = "reported" | "commentary" | "rumor" | "filing-notice";
 export type HealthStatus = "ok" | "partial" | "auth-required" | "rate-limited" | "unavailable" | "misconfigured" | "error";
 

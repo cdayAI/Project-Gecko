@@ -48,7 +48,10 @@
     "research:value-pricing-test": "node --import tsx src/research/valuation-pricing-selftest.ts",
     "research:value-calibration-test": "node --import tsx src/research/valuation-calibration-selftest.ts",
     "news": "node --import tsx src/research/news/news-cli.ts",
-    "news:selftest": "node --import tsx src/research/news/news-selftest.ts"
+    "news:selftest": "node --import tsx src/research/news/news-selftest.ts",
+    "jev": "node --import tsx src/research/jev/jev-cli.ts",
+    "jev:selftest": "node --import tsx src/research/jev/client-selftest.ts && node --import tsx src/research/jev/shadow-selftest.ts && node --import tsx src/research/jev/evaluation-selftest.ts && node --import tsx src/research/jev/watch-selftest.ts",
+    "jev:watch-test": "node --import tsx src/research/jev/watch-selftest.ts"
   },
   "dependencies": {
     "dotenv": "^16",

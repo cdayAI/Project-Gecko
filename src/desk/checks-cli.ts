@@ -18,12 +18,14 @@ function inspect(file: string): void {
   }
 }
 inspect("src/desk/desk-cli.ts");
+inspect("src/research/jev/jev-cli.ts");
 log.info("Manual runtime import boundary passed", { modules: visited.size });
 
 const commands = [
   ["node_modules/typescript/bin/tsc"],
   ...["src/research/providers/webull/signer-selftest.ts", "src/research/quote-quality-selftest.ts",
     "src/research/providers/webull/provider-selftest.ts", "src/research/news/news-selftest.ts",
+    "src/research/jev/client-selftest.ts", "src/research/jev/shadow-selftest.ts", "src/research/jev/evaluation-selftest.ts", "src/research/jev/watch-selftest.ts",
     "src/desk/desk-selftest.ts", "src/desk/picker-selftest.ts",
     "src/backtest/manual-backtest-selftest.ts", "src/backtest/manual-options-selftest.ts",
     "src/backtest/edge-selftest.ts", "src/backtest/research-statistics-selftest.ts", "src/backtest/research-coverage-selftest.ts",

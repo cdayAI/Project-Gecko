@@ -23,7 +23,7 @@ function asEvent(value: unknown): NewsEvent {
   const row = record(value);
   if (!row || row.schemaVersion !== 1 || typeof row.id !== "string" || typeof row.contentHash !== "string"
     || !Number.isInteger(row.revision) || typeof row.firstSeenAt !== "number" || !Number.isFinite(row.firstSeenAt)
-    || !["yahoo", "sec", "x", "benzinga"].includes(String(row.source)) || typeof row.sourceId !== "string"
+    || !["yahoo", "sec", "x", "benzinga", "primary"].includes(String(row.source)) || typeof row.sourceId !== "string"
     || typeof row.title !== "string" || typeof row.url !== "string" || canonicalUrl(row.url) === null
     || typeof row.publisher !== "string" || !Array.isArray(row.symbols) || !row.symbols.every((symbol) => typeof symbol === "string")
     || typeof row.publishedAt !== "number" || !Number.isFinite(row.publishedAt)
@@ -64,7 +64,7 @@ export class NewsLedger {
     const latest = new Map<string, SourceHealth>();
     for (const value of readRows(this.healthPath)) {
       const row = record(value);
-      if (!row || !["yahoo", "sec", "x", "benzinga"].includes(String(row.source)) || typeof row.checkedAt !== "number" || !Number.isFinite(row.checkedAt)
+      if (!row || !["yahoo", "sec", "x", "benzinga", "primary"].includes(String(row.source)) || typeof row.checkedAt !== "number" || !Number.isFinite(row.checkedAt)
         || !["ok", "partial", "auth-required", "rate-limited", "unavailable", "misconfigured", "error"].includes(String(row.status)) || !Array.isArray(row.notes)) throw new Error("News health ledger schema is invalid");
       if (row.checkedAt <= now) latest.set(String(row.source), row as unknown as SourceHealth);
     }
