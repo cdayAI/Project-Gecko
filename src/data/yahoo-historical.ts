@@ -27,6 +27,10 @@ const BASE_URL = "https://query1.finance.yahoo.com/v8/finance/chart";
 const USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15";
 const CACHE_DIR = path.join("data", "yahoo-cache");
 const DAY_MS = 24 * 60 * 60 * 1000;
+// Yahoo rate-limits datacenter IPs. Space network requests out; cache hits
+// never wait.
+const MIN_REQUEST_GAP_MS = 400;
+let lastRequestAt = 0;
 
 export type YahooInterval = "1m" | "5m" | "15m" | "1h" | "1d";
 
@@ -78,6 +82,9 @@ export class YahooHistoricalBars {
     });
     const url = `${BASE_URL}/${encodeURIComponent(params.symbol.toUpperCase())}?${qs.toString()}`;
 
+    const wait = lastRequestAt + MIN_REQUEST_GAP_MS - Date.now();
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    lastRequestAt = Date.now();
     const resp = await fetchWithRetry(url, {
       headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
     });

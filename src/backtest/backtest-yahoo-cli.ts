@@ -5,6 +5,8 @@
 //   npm run backtest:yahoo -- --symbols=PLTR,SOFI       # custom symbols
 //   npm run backtest:yahoo -- --equity=10000
 //   npm run backtest:yahoo -- --interval=15m            # coarser bars
+//   npm run backtest:yahoo -- --slippage=0.02           # double-cost stress
+//   npm run backtest:yahoo -- --out=data/bt/trades.jsonl # dump every trade
 //
 // Limits:
 //   - Yahoo 5m bars: max 60 days of history per symbol.
@@ -21,6 +23,8 @@
 //   - 60-day window is statistically thin. 95% CI on win rate at n=50
 //     trades and p=0.45 is roughly +-14 percentage points.
 
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { createLogger, setLogLevel } from "../core/logger.js";
 import { etParts } from "../utils/time.js";
 import { YahooHistoricalBars } from "../data/yahoo-historical.js";
@@ -39,7 +43,7 @@ const OR_START_MIN = 9 * 60 + 30;
 const OR_END_MIN = 9 * 60 + 45;
 const OR_MIN_WIDTH_PCT = 0.5;
 const OR_MAX_WIDTH_PCT = 5.0;
-const SLIPPAGE_PER_SIDE = 0.01;
+const DEFAULT_SLIPPAGE_PER_SIDE = 0.01;
 
 const DEFAULT_MIN_GAP_PCT = 2.0;
 const DEFAULT_MIN_PRICE = 5.0;
@@ -56,6 +60,8 @@ interface Args {
   maxConcurrent: number;
   rrTarget: number;
   timeStopMin: number;
+  slippage: number;          // $ per side, applied on entry and exit
+  out: string;               // optional JSONL path for every simulated trade
 }
 
 function parseArgs(): Args {
@@ -67,6 +73,8 @@ function parseArgs(): Args {
     maxConcurrent: 3,
     rrTarget: DEFAULT_RR,
     timeStopMin: DEFAULT_TIME_STOP_MIN,
+    slippage: DEFAULT_SLIPPAGE_PER_SIDE,
+    out: "",
   };
   for (const a of process.argv.slice(2)) {
     if (a.startsWith("--symbols=")) {
@@ -85,6 +93,10 @@ function parseArgs(): Args {
       out.maxConcurrent = Number(a.slice("--concurrent=".length));
     } else if (a.startsWith("--rr=")) {
       out.rrTarget = Number(a.slice("--rr=".length));
+    } else if (a.startsWith("--slippage=")) {
+      out.slippage = Number(a.slice("--slippage=".length));
+    } else if (a.startsWith("--out=")) {
+      out.out = a.slice("--out=".length);
     } else if (a.startsWith("--timestop=")) {
       // Accept HH:MM (e.g. 13:00) or absolute minutes from midnight.
       const v = a.slice("--timestop=".length);
@@ -105,7 +117,10 @@ async function main(): Promise<void> {
 
   const yahoo = new YahooHistoricalBars();
   const now = Date.now();
-  const lookbackDays = args.interval === "1m" ? 7 : 60;
+  // Yahoo enforces its 60-day 5m limit against its own clock; a full 60-day
+  // request computed once at startup is rejected (HTTP 422) for every symbol
+  // after the first. 59 days leaves the needed margin.
+  const lookbackDays = args.interval === "1m" ? 7 : 59;
   const endMs = now;
   const startMs = now - lookbackDays * 24 * 60 * 60 * 1000;
 
@@ -120,6 +135,8 @@ async function main(): Promise<void> {
 
   // Pull bars for all symbols (Yahoo throttle is inside the fetcher).
   const bySymbol: Record<string, Bar[]> = {};
+  let windowFirst = "";
+  let windowLast = "";
   for (const symbol of args.symbols) {
     try {
       const bars = await yahoo.fetch({
@@ -139,6 +156,12 @@ async function main(): Promise<void> {
       });
       bySymbol[symbol] = [...bars];
       bySymbol[`${symbol}__daily`] = [...dailyBars];
+      if (bars[0]) {
+        const first = etParts(bars[0].timestamp).date;
+        const last = etParts(bars[bars.length - 1].timestamp).date;
+        if (!windowFirst || first < windowFirst) windowFirst = first;
+        if (!windowLast || last > windowLast) windowLast = last;
+      }
       log.info("Loaded bars", {
         symbol,
         intradayBars: bars.length,
@@ -164,6 +187,9 @@ async function main(): Promise<void> {
 
   let equity = args.equity;
   const trades: BacktestTrade[] = [];
+  // Per-symbol funnel: how many sessions passed each filter stage.
+  const funnel: Record<string, SymbolFunnel> = {};
+  for (const symbol of args.symbols) funnel[symbol] = { gapDays: 0, orDays: 0, trades: 0, pnl: 0 };
 
   for (const date of sortedDays) {
     // Build a per-day candidate list across all symbols.
@@ -198,11 +224,14 @@ async function main(): Promise<void> {
         minGapPct: args.minGapPct,
         rrTarget: args.rrTarget,
         timeStopMin: args.timeStopMin,
-      });
+        slippage: args.slippage,
+      }, funnel[c.symbol]);
       if (trade) {
         trades.push(trade);
         equity += trade.pnl;
         opened++;
+        funnel[c.symbol].trades++;
+        funnel[c.symbol].pnl += trade.pnl;
       }
     }
   }
@@ -212,7 +241,8 @@ async function main(): Promise<void> {
   process.stdout.write("\n===== Yahoo ORB Backtest =====\n");
   process.stdout.write(`Symbols (${args.symbols.length}): ${args.symbols.join(", ")}\n`);
   process.stdout.write(`Interval:        ${args.interval}\n`);
-  process.stdout.write(`Lookback:        ${lookbackDays} days\n`);
+  process.stdout.write(`Lookback:        ${lookbackDays} days (${windowFirst} to ${windowLast})\n`);
+  process.stdout.write(`Slippage/side:   ${args.slippage.toFixed(3)}\n`);
   process.stdout.write(`Trading days:    ${sortedDays.length}\n`);
   process.stdout.write(`Starting equity: $${args.equity}\n`);
   process.stdout.write(`Final equity:    $${equity.toFixed(2)}\n`);
@@ -245,6 +275,31 @@ async function main(): Promise<void> {
     process.stdout.write(`  ${t.date} ${t.symbol} ${t.direction}: $${t.pnl.toFixed(2)} (${t.rMultiple.toFixed(1)}R, ${t.exitReason})\n`);
   }
 
+  // Direction breakdown.
+  process.stdout.write("\nBy direction:\n");
+  for (const dir of ["LONG", "SHORT"] as const) {
+    const ts = trades.filter((t) => t.direction === dir);
+    const w = ts.filter((t) => t.pnl > 0).length;
+    const pnl = ts.reduce((a, t) => a + t.pnl, 0);
+    process.stdout.write(`  ${dir}: ${ts.length} trades, ${w}W/${ts.length - w}L, ${pnl.toFixed(2)}\n`);
+  }
+
+  // Per-symbol funnel: sessions that passed gap+price, then OR width, then traded.
+  process.stdout.write("\nPer-symbol funnel (gapDays / orDays / trades / pnl):\n");
+  const rows = Object.entries(funnel).sort((a, b) => b[1].pnl - a[1].pnl);
+  let silent = 0;
+  for (const [sym, f] of rows) {
+    if (f.gapDays === 0) { silent++; continue; }
+    process.stdout.write(`  ${sym.padEnd(6)} ${String(f.gapDays).padStart(3)} / ${String(f.orDays).padStart(3)} / ${String(f.trades).padStart(3)} / ${f.pnl.toFixed(2)}\n`);
+  }
+  process.stdout.write(`  (${silent} symbols never qualified: no gap >= ${args.minGapPct}% at a ${DEFAULT_MIN_PRICE}-${DEFAULT_MAX_PRICE} open)\n`);
+
+  if (args.out) {
+    fs.mkdirSync(path.dirname(args.out), { recursive: true });
+    fs.writeFileSync(args.out, trades.map((t) => JSON.stringify(t)).join("\n") + (trades.length ? "\n" : ""));
+    log.info("Trades written", { path: args.out, count: trades.length });
+  }
+
   // Daily P&L breakdown.
   const byDate: Record<string, number> = {};
   for (const t of trades) {
@@ -258,6 +313,13 @@ async function main(): Promise<void> {
   }
 }
 
+interface SymbolFunnel {
+  gapDays: number;
+  orDays: number;
+  trades: number;
+  pnl: number;
+}
+
 function simulateDay(args: {
   readonly symbol: string;
   readonly date: string;
@@ -267,8 +329,9 @@ function simulateDay(args: {
   readonly minGapPct: number;
   readonly rrTarget: number;
   readonly timeStopMin: number;
-}): BacktestTrade | null {
-  const { symbol, date, prevClose, bars, equity, minGapPct, rrTarget, timeStopMin } = args;
+  readonly slippage: number;
+}, funnel: SymbolFunnel): BacktestTrade | null {
+  const { symbol, date, prevClose, bars, equity, minGapPct, rrTarget, timeStopMin, slippage } = args;
 
   // Find first regular-session bar.
   const firstRegular = bars.find((b) => minutesOfDayET(b.timestamp) >= OR_START_MIN);
@@ -279,6 +342,7 @@ function simulateDay(args: {
   const absGap = Math.abs(gapPct);
   if (absGap < minGapPct) return null;
   if (openPrice < DEFAULT_MIN_PRICE || openPrice > DEFAULT_MAX_PRICE) return null;
+  funnel.gapDays++;
 
   // Build opening range from bars in [09:30, 09:45).
   let orHigh = -Infinity;
@@ -294,6 +358,7 @@ function simulateDay(args: {
   const midpoint = (orHigh + orLow) / 2;
   const orWidthPct = midpoint > 0 ? (orHigh - orLow) / midpoint * 100 : 0;
   if (orWidthPct < OR_MIN_WIDTH_PCT || orWidthPct > OR_MAX_WIDTH_PCT) return null;
+  funnel.orDays++;
 
   // Scan from 09:45 onward for first breakout. Time-stop is configurable;
   // include bars up to AND including the cutoff so the time-stop fires.
@@ -315,8 +380,8 @@ function simulateDay(args: {
     const next = triggerBars[i + 1];
     if (!next) return null;
     const entryPrice = direction === "LONG"
-      ? next.open + SLIPPAGE_PER_SIDE
-      : next.open - SLIPPAGE_PER_SIDE;
+      ? next.open + slippage
+      : next.open - slippage;
     const stop = direction === "LONG" ? orLow : orHigh;
     const stopDist = Math.abs(entryPrice - stop);
     if (stopDist <= 0) return null;
@@ -336,31 +401,31 @@ function simulateDay(args: {
 
       if (direction === "LONG") {
         if (fwd.low <= stop) {
-          const exit = stop - SLIPPAGE_PER_SIDE;
+          const exit = stop - slippage;
           return makeTrade(symbol, date, direction, entryPrice, exit, stop, take, shares, "stop", fwd.timestamp, b.timestamp);
         }
         if (fwd.high >= take) {
-          const exit = take - SLIPPAGE_PER_SIDE;
+          const exit = take - slippage;
           return makeTrade(symbol, date, direction, entryPrice, exit, stop, take, shares, "take", fwd.timestamp, b.timestamp);
         }
       } else {
         if (fwd.high >= stop) {
-          const exit = stop + SLIPPAGE_PER_SIDE;
+          const exit = stop + slippage;
           return makeTrade(symbol, date, direction, entryPrice, exit, stop, take, shares, "stop", fwd.timestamp, b.timestamp);
         }
         if (fwd.low <= take) {
-          const exit = take + SLIPPAGE_PER_SIDE;
+          const exit = take + slippage;
           return makeTrade(symbol, date, direction, entryPrice, exit, stop, take, shares, "take", fwd.timestamp, b.timestamp);
         }
       }
 
       if (fwdMin >= timeStopMin) {
-        const exit = direction === "LONG" ? fwd.close - SLIPPAGE_PER_SIDE : fwd.close + SLIPPAGE_PER_SIDE;
+        const exit = direction === "LONG" ? fwd.close - slippage : fwd.close + slippage;
         return makeTrade(symbol, date, direction, entryPrice, exit, stop, take, shares, "time", fwd.timestamp, b.timestamp);
       }
     }
     const last = triggerBars[triggerBars.length - 1];
-    const exit = direction === "LONG" ? last.close - SLIPPAGE_PER_SIDE : last.close + SLIPPAGE_PER_SIDE;
+    const exit = direction === "LONG" ? last.close - slippage : last.close + slippage;
     return makeTrade(symbol, date, direction, entryPrice, exit, stop, take, shares, "eod", last.timestamp, b.timestamp);
   }
   return null;
