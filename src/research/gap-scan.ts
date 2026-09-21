@@ -355,8 +355,9 @@ async function schwabContract(rest: SchwabRest, symbol: string, price: number, r
     const fridays = expKeys.filter((k) => isFriday(k.slice(0, 10)));
     const expKey = fridays[0] ?? expKeys[0];
     const target = right === "C" ? price * (1 + otmPct / 100) : price * (1 - otmPct / 100);
-    let best: { strike: number; c: { symbol: string; bid: number; ask: number; delta: number; openInterest: number } } | null = null;
-    let fallback: typeof best = null;
+    type StrikePick = { strike: number; c: { symbol: string; bid: number; ask: number; delta: number; openInterest: number } };
+    let best: StrikePick | null = null;
+    let fallback: StrikePick | null = null;
     for (const arr of Object.values(map[expKey])) {
       for (const c of arr) {
         const otm = right === "C" ? c.strikePrice >= price : c.strikePrice <= price;
