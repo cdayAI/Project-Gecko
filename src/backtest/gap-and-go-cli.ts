@@ -3,6 +3,11 @@
 //   npm run backtest:gapgo                       # top 1,500 names, 59 days
 //   npm run backtest:gapgo -- --max-names 300 --min-gap 3 --slippage-bps 10
 //   npm run backtest:gapgo -- --out data/bt/gapgo.jsonl
+//   npm run backtest:gapgo -- --source store --grid      # Schwab store (npm run history:pull)
+//
+// --source auto|yahoo|store: the store (data/history/5m) is used when a symbol
+// is present, else Yahoo's 60-day window. With the store the grid splits
+// selection/validation at the median session instead of the fixed dates.
 //
 // Rule (frozen in docs/gap-and-go-registration-2026-09-21.md): pre-market
 // last at least --min-gap percent from the prior close and beyond the prior
@@ -19,6 +24,7 @@ import { createLogger, setLogLevel } from "../core/logger.js";
 import { etParts } from "../utils/time.js";
 import { YahooHistoricalBars } from "../data/yahoo-historical.js";
 import { loadUniverse } from "../research/universe.js";
+import { loadStoredIntraday } from "../data/bar-store.js";
 import { SECTOR_ETFS, sectorFor } from "../research/sectors.js";
 import type { Bar } from "../core/types.js";
 
@@ -32,10 +38,13 @@ interface Args {
   lookbackDays: number;
   grid: boolean;
   gridOut: string;
+  source: "auto" | "yahoo" | "store";
+  split: "date" | "half";
 }
 
 function parseArgs(argv: readonly string[]): Args {
-  const out: Args = { maxNames: 1500, minGapPct: 3, slippageBps: 5, out: "", lookbackDays: 59, grid: false, gridOut: "" };
+  const out: Args = { maxNames: 1500, minGapPct: 3, slippageBps: 5, out: "", lookbackDays: 59, grid: false, gridOut: "", source: "auto", split: "date" };
+  let splitGiven = false;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--max-names") out.maxNames = Number(argv[++i]);
@@ -45,8 +54,21 @@ function parseArgs(argv: readonly string[]): Args {
     else if (a === "--lookback") out.lookbackDays = Number(argv[++i]);
     else if (a === "--grid") out.grid = true;
     else if (a === "--grid-out") out.gridOut = argv[++i] ?? "";
+    else if (a === "--source") { const v = (argv[++i] ?? "").toLowerCase(); if (v === "yahoo" || v === "store" || v === "auto") out.source = v; }
+    else if (a === "--split") { const v = (argv[++i] ?? "").toLowerCase(); if (v === "date" || v === "half") { out.split = v; splitGiven = true; } }
   }
+  if (!splitGiven && out.source === "store") out.split = "half";
   return out;
+}
+
+// Intraday bars for a symbol: the store when present (and allowed), else Yahoo.
+async function loadIntraday(yahoo: YahooHistoricalBars, symbol: string, now: number, args: Args): Promise<readonly Bar[] | null> {
+  if (args.source !== "yahoo") {
+    const stored = loadStoredIntraday(symbol);
+    if (stored) return stored;
+    if (args.source === "store") return null;
+  }
+  return yahoo.fetch({ symbol, interval: "5m", startMs: now - args.lookbackDays * 86_400_000, endMs: now, includePrePost: true });
 }
 
 export interface GapGoTrade {
@@ -92,11 +114,14 @@ async function main(): Promise<void> {
   for (let i = 0; i < names.length; i++) {
     const symbol = names[i];
     try {
-      const intraday = await yahoo.fetch({ symbol, interval: "5m", startMs: now - args.lookbackDays * 86_400_000, endMs: now, includePrePost: true });
+      const intraday = await loadIntraday(yahoo, symbol, now, args);
+      if (!intraday) continue;
       const daily = await yahoo.fetch({ symbol, interval: "1d", startMs: now - 400 * 86_400_000, endMs: now, includePrePost: false });
       const byDate = groupByDate(intraday);
       const dailyByDate = daily.map((b) => ({ date: etParts(b.timestamp).date, b }));
+      const todayDate = etParts(now).date;
       for (const [date, bars] of byDate) {
+        if (date >= todayDate) continue;                    // never the partial current session
         sessionsSeen.add(date);
         // Point-in-time daily stats strictly before this session.
         const prior = dailyByDate.filter((d) => d.date < date).map((d) => d.b);
@@ -242,8 +267,7 @@ function fmt(n: number): string { return `${n >= 0 ? "+" : "-"}$${Math.abs(n).to
 
 // ----- H-GAP-WR grid (docs/gap-and-go-registration-2026-09-21.md) -----
 
-const SELECTION_END = "2026-08-20";      // sessions on or before: selection; after: validation
-const WINDOW_END = "2026-09-18";         // the partial 2026-09-21 session is excluded
+const SELECTION_END_DATE = "2026-08-20"; // date split used by the recorded 39-session grid
 
 interface Ctx {
   readonly symbol: string;
@@ -290,12 +314,14 @@ async function runGrid(names: readonly string[], yahoo: YahooHistoricalBars, now
   for (let i = 0; i < names.length; i++) {
     const symbol = names[i];
     try {
-      const intraday = await yahoo.fetch({ symbol, interval: "5m", startMs: now - args.lookbackDays * 86_400_000, endMs: now, includePrePost: true });
+      const intraday = await loadIntraday(yahoo, symbol, now, args);
+      if (!intraday) continue;
       const daily = await yahoo.fetch({ symbol, interval: "1d", startMs: now - 400 * 86_400_000, endMs: now, includePrePost: false });
       const byDate = groupByDate(intraday);
       const dailyByDate = daily.map((b) => ({ date: etParts(b.timestamp).date, b }));
+      const todayDate = etParts(now).date;
       for (const [date, bars] of byDate) {
-        if (date > WINDOW_END) continue;
+        if (date >= todayDate) continue;
         const prior = dailyByDate.filter((d) => d.date < date).map((d) => d.b);
         if (prior.length < 30) continue;
         const priorClose = prior[prior.length - 1].close;
@@ -322,7 +348,8 @@ async function runGrid(names: readonly string[], yahoo: YahooHistoricalBars, now
     if ((i + 1) % 300 === 0) process.stdout.write(`  contexts: ${i + 1}/${names.length} names, ${ctxs.length} candidates, ${((Date.now() - startedAt) / 60_000).toFixed(1)} min\n`);
   }
   const sessions = [...new Set(ctxs.map((c) => c.date))].sort();
-  process.stdout.write(`\n===== H-GAP-WR grid: ${ctxs.length} candidate contexts over ${sessions.length} sessions (${sessions[0]} to ${sessions[sessions.length - 1]}), ${failed} failed, slippage ${args.slippageBps} bps/side =====\nSelection: sessions <= ${SELECTION_END}; validation after. Criterion: highest selection win rate with PF >= 1.30, expectancy > 0, n >= 60.\n`);
+  const SELECTION_END = args.split === "half" ? sessions[Math.floor(sessions.length / 2) - 1] : SELECTION_END_DATE;
+  process.stdout.write(`\n===== H-GAP-WR grid: ${ctxs.length} candidate contexts over ${sessions.length} sessions (${sessions[0]} to ${sessions[sessions.length - 1]}), ${failed} failed, slippage ${args.slippageBps} bps/side, source ${args.source} =====\nSelection: sessions <= ${SELECTION_END} (${args.split === "half" ? "median split" : "fixed date"}); validation after. Criterion: highest selection win rate with PF >= 1.30, expectancy > 0, n >= 60.\n`);
 
   const base: Variant = { minGap: 3, structure: "20d", direction: "both", exit: "atr", stop: "0930", cutoff: "1130", sector: false };
   const variants: Variant[] = [];

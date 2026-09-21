@@ -77,7 +77,18 @@ async function main(): Promise<void> {
   const slip = args.slippageBps / 10_000;
   const startedAt = Date.now();
 
-  const ctxs: DayCtx[] = [];
+  const variants: { strategy: "FILL" | "DIP"; name: string; run: (c: DayCtx) => Trade | null }[] = [
+    { strategy: "FILL", name: "half-fill, stop 0930 low, out 12:00", run: (c) => fill(c, "half", "0930", NOON, slip) },
+    { strategy: "FILL", name: "full-fill, stop 0930 low, out 12:00", run: (c) => fill(c, "full", "0930", NOON, slip) },
+    { strategy: "FILL", name: "half-fill, stop 0930 low, out 15:45", run: (c) => fill(c, "half", "0930", LATE, slip) },
+    { strategy: "FILL", name: "half-fill, stop open-0.5ATR, out 12:00", run: (c) => fill(c, "half", "atr", NOON, slip) },
+    { strategy: "DIP", name: "target open, stop signal low, out 12:00", run: (c) => dip(c, "open", NOON, slip) },
+    { strategy: "DIP", name: "target open, stop signal low, out 15:45", run: (c) => dip(c, "open", LATE, slip) },
+    { strategy: "DIP", name: "target open+0.25ATR, stop signal low, out 12:00", run: (c) => dip(c, "plus", NOON, slip) },
+  ];
+  const tradesByVariant: Trade[][] = variants.map(() => []);
+  const sessionSet = new Set<string>();
+  let nameSessions = 0;
   let stored = 0, fetched = 0, failed = 0;
   for (let i = 0; i < names.length; i++) {
     const symbol = names[i];
@@ -95,30 +106,23 @@ async function main(): Promise<void> {
         const rth = bars.filter((b) => { const m = minutesEt(b.timestamp); return m >= OPEN_MIN && m < 16 * 60; });
         if (rth.length < 30) continue;
         const c = prior.map((b) => b.close);
-        ctxs.push({ symbol, date, rth, priorClose: c[c.length - 1], sma20: mean(c.slice(-20)), sma200: mean(c.slice(-200)), atr: atr14(prior) });
+        const ctx: DayCtx = { symbol, date, rth, priorClose: c[c.length - 1], sma20: mean(c.slice(-20)), sma200: mean(c.slice(-200)), atr: atr14(prior) };
+        nameSessions++;
+        sessionSet.add(date);
+        variants.forEach((v, vi) => { const t = v.run(ctx); if (t) tradesByVariant[vi].push({ ...t, variant: v.name }); });
       }
     } catch { failed++; }
-    if ((i + 1) % 300 === 0) process.stdout.write(`  ${i + 1}/${names.length} names, ${ctxs.length} sessions x names, ${((Date.now() - startedAt) / 60_000).toFixed(1)} min\n`);
+    if ((i + 1) % 300 === 0) process.stdout.write(`  ${i + 1}/${names.length} names, ${nameSessions} sessions x names, ${((Date.now() - startedAt) / 60_000).toFixed(1)} min\n`);
   }
-  const sessions = [...new Set(ctxs.map((c) => c.date))].sort();
+  const sessions = [...sessionSet].sort();
   const splitIdx = Math.floor(sessions.length / 2);
   const selEnd = sessions[splitIdx - 1];
 
-  const variants: { strategy: "FILL" | "DIP"; name: string; run: (c: DayCtx) => Trade | null }[] = [
-    { strategy: "FILL", name: "half-fill, stop 0930 low, out 12:00", run: (c) => fill(c, "half", "0930", NOON, slip) },
-    { strategy: "FILL", name: "full-fill, stop 0930 low, out 12:00", run: (c) => fill(c, "full", "0930", NOON, slip) },
-    { strategy: "FILL", name: "half-fill, stop 0930 low, out 15:45", run: (c) => fill(c, "half", "0930", LATE, slip) },
-    { strategy: "FILL", name: "half-fill, stop open-0.5ATR, out 12:00", run: (c) => fill(c, "half", "atr", NOON, slip) },
-    { strategy: "DIP", name: "target open, stop signal low, out 12:00", run: (c) => dip(c, "open", NOON, slip) },
-    { strategy: "DIP", name: "target open, stop signal low, out 15:45", run: (c) => dip(c, "open", LATE, slip) },
-    { strategy: "DIP", name: "target open+0.25ATR, stop signal low, out 12:00", run: (c) => dip(c, "plus", NOON, slip) },
-  ];
-
   const all: Trade[] = [];
-  process.stdout.write(`\n===== Intraday mean-reversion pilot: ${ctxs.length} name-sessions over ${sessions.length} sessions (${sessions[0]} to ${sessions[sessions.length - 1]}); stored ${stored}, yahoo ${fetched}, failed ${failed}; slippage ${args.slippageBps} bps/side =====\nSelection: first ${splitIdx} sessions (through ${selEnd}); validation: the rest.\n`);
-  for (const v of variants) {
-    const trades: Trade[] = [];
-    for (const c of ctxs) { const t = v.run(c); if (t) trades.push({ ...t, variant: v.name }); }
+  process.stdout.write(`\n===== Intraday mean-reversion pilot: ${nameSessions} name-sessions over ${sessions.length} sessions (${sessions[0]} to ${sessions[sessions.length - 1]}); stored ${stored}, yahoo ${fetched}, failed ${failed}; slippage ${args.slippageBps} bps/side =====\nSelection: first ${splitIdx} sessions (through ${selEnd}); validation: the rest.\n`);
+  for (let vi = 0; vi < variants.length; vi++) {
+    const v = variants[vi];
+    const trades = tradesByVariant[vi];
     all.push(...trades);
     const sel = trades.filter((t) => t.date <= selEnd), val = trades.filter((t) => t.date > selEnd);
     process.stdout.write(`\n## H-${v.strategy}: ${v.name}\n`);
