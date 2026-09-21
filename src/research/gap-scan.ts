@@ -211,7 +211,12 @@ async function main(): Promise<void> {
   }
 
   const p = etParts(now);
-  process.stdout.write(`\n===== Pre-market gap scan ${today} ${String(p.hour).padStart(2, "0")}:${String(p.minute).padStart(2, "0")} ET =====\n`);
+  const preOpen = beforeOpenEt(now);
+  const hhmm = `${String(p.hour).padStart(2, "0")}:${String(p.minute).padStart(2, "0")}`;
+  process.stdout.write(preOpen
+    ? `\n===== Pre-market gap scan ${today} ${hhmm} ET =====\n`
+    : `\n===== Session recap (not a pre-market run) ${today} ${hhmm} ET =====\n`);
+  if (!preOpen) process.stdout.write(`Run after 09:30 ET: Gap% is the latest print versus the prior regular-session close, so on a trading day it is today's move, not tomorrow's gap. Star flags on this run describe today's movers only; they are not setups. Run between 04:00 and 09:30 ET for tradeable rows.\n`);
   process.stdout.write(`Source: ${source}\nProvider: ${providerName}\n`);
   process.stdout.write(`Tape: ${tape.join("  ")}\n`);
   process.stdout.write(`Scanned ${names.length}: ${rows.length} gaps >= ${args.minGapPct}%, ${noPrints} without pre-market prints${schwab ? `, ${thin} below ${args.minPmVolume.toLocaleString()} pre-market shares` : ""}, ${failed} failed, ${((Date.now() - startedAt) / 60_000).toFixed(1)} min\n`);
@@ -294,7 +299,15 @@ async function schwabGaps(rest: SchwabRest, symbols: readonly string[], today: s
       const priorClose = quote.closePrice ?? 0;
       if (!(priorClose > 0)) continue;
       const extIsToday = ext?.tradeTime !== undefined && etParts(ext.tradeTime).date === today;
-      const last = extIsToday && ext?.lastPrice && ext.lastPrice > 0 ? ext.lastPrice : quote.lastPrice ?? 0;
+      // Freshest print wins. After the close the extended block can still hold
+      // the morning's pre-market trade (seen on the sector ETFs at 18:27 ET on
+      // 2026-09-21: SPY read +0.58% against a +1.55% close), so an extended
+      // print replaces the regular quote only when its tradeTime is not older.
+      // Both tradeTime fields are documented on the Schwab quote payload.
+      const extLast = extIsToday && typeof ext?.lastPrice === "number" && ext.lastPrice > 0 ? ext.lastPrice : null;
+      const extFresh = extLast !== null && (typeof quote.tradeTime !== "number" || (ext?.tradeTime ?? 0) >= quote.tradeTime);
+      if (extLast !== null && !extFresh) log.debug("Stale extended print ignored", { symbol: sym, extTradeTime: ext?.tradeTime, quoteTradeTime: quote.tradeTime });
+      const last = extFresh && extLast !== null ? extLast : quote.lastPrice ?? 0;
       if (!(last > 0)) continue;
       out.set(sym.toUpperCase(), {
         premarketLast: last,

@@ -9,15 +9,18 @@ Jev's classifications reach the research partner in one push.
 ```powershell
 gecko
 git pull origin claude/epic-johnson-a4kh4c
-npm run packet -- --provider schwab --push
+npm run packet -- --provider schwab --push --no-swing
 ```
 
-This runs `scan:gap` (Schwab, whole universe), `scan:swing`, pulls the
-last 24 hours of attributed headlines for every candidate (Yahoo, no
-key), runs Jev over them (bounded to 12 requests, via the Windows vault),
-writes everything to `docs/daily/YYYY-MM-DD/`, and pushes it to
-`codex/daily-YYYY-MM-DD`. Then say "packet is up" and the partner reads
-it from that branch. Files:
+This runs `scan:gap` (Schwab, whole universe), pulls the last 24 hours
+of attributed headlines for every candidate (Yahoo, no key), runs Jev
+over them (bounded to 12 requests, via the Windows vault), writes
+everything to `docs/daily/YYYY-MM-DD/`, and pushes it to
+`codex/daily-YYYY-MM-DD`. About two minutes. `--no-swing` skips the
+swing scan (12 minutes over the universe) because its daily bars do not
+change between the close and the next open: the evening packet's swing
+verdict is the morning's verdict. Then say "packet is up" and the
+partner reads it from that branch. Files:
 
 - `README.md`: provider and tape line, star rows, other gap rows, swing
   verdict, Jev status, forward-log summary
@@ -35,8 +38,15 @@ Log every decision, taken or watched, then push a closing packet:
 npm run log -- add --date 2026-09-22 --symbol XYZ --side long --source gap --tier star --gap 12.4 --sector "SMH +1.8%" --catalyst "what you believed the reason was" --taken yes --instrument stock --qty 20 --entry 51.20 --entry-time 09:40 --stop 49.80 --target1 53.10 --target2 54.05 --exit 53.10 --exit-time 10:25 --exit-reason target1 --fees 0
 npm run log -- add --date 2026-09-22 --symbol ABC --source gap --tier watch --gap 6.1 --catalyst "none found" --taken no --entry 22.10 --entry-time 09:40 --stop 21.40 --exit 21.95 --exit-time 15:45 --exit-reason time --notes "watched; rule replay"
 npm run log -- report
-npm run packet -- --provider schwab --push --label close
+npm run packet -- --provider schwab --push
 ```
+
+Runs after 09:30 ET are labelled automatically (`-intraday`, or `-close`
+from 16:00 ET) so they never overwrite the morning packet; `--label`
+overrides. An after-open scan is a recap of the day's movers (last
+print versus the prior close), not tomorrow's gap list, and the packet
+says so; the swing scan in the evening packet is the one that counts
+for the next morning.
 
 Rules for the log: `--taken yes` only for real fills, at the actual fill
 prices; watched setups get the rule's replay prices so the two groups

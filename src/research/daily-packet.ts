@@ -2,8 +2,8 @@
 // candidate, runs Jev over them when a key is available, and writes it all to
 // docs/daily/<date>/ so it can be pushed and read by the research partner.
 //
-//   npm run packet -- --provider schwab --push          # morning, 08:50 ET
-//   npm run packet -- --provider schwab --push --label close   # after the close
+//   npm run packet -- --provider schwab --push --no-swing   # morning, 08:50 ET
+//   npm run packet -- --provider schwab --push               # after the close
 //   npm run packet -- --no-jev --scan-args "--symbols AMD,VICR --provider yahoo"   # test
 //
 // Steps: scan:gap -> scan:swing -> news (Yahoo headlines, last 24h, for the
@@ -11,23 +11,31 @@
 // and push docs/daily and docs/log to codex/daily-<date> (--push). Jev uses
 // scripts/Invoke-Jev.ps1 on Windows (DPAPI vault) or TYPESAFE_API_KEY
 // elsewhere; when neither is available the packet says so and continues.
-// Read-only; never places orders.
+// --no-swing skips the swing scan (about 12 minutes over the universe); its
+// daily bars do not change between the close and the next open, so the
+// evening verdict stands for the morning. Runs after 09:30 ET are labelled
+// automatically (intraday, or close from 16:00 ET) unless --label is given,
+// so an evening run never overwrites the morning packet. Read-only; never
+// places orders.
 
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { spawnSync } from "node:child_process";
 import { etParts } from "../utils/time.js";
 
-interface Args { provider: string; push: boolean; jev: boolean; jevRequests: number; top: number; scanArgs: string; label: string; date: string }
+interface Args { provider: string; push: boolean; jev: boolean; swing: boolean; jevRequests: number; top: number; scanArgs: string; label: string; date: string }
 
 function parseArgs(argv: readonly string[]): Args {
   const p = etParts(Date.now());
-  const out: Args = { provider: "auto", push: false, jev: true, jevRequests: 12, top: 10, scanArgs: "", label: "", date: p.date };
+  const mins = p.hour * 60 + p.minute;
+  const defaultLabel = mins < 9 * 60 + 30 ? "" : mins < 16 * 60 ? "intraday" : "close";
+  const out: Args = { provider: "auto", push: false, jev: true, swing: true, jevRequests: 12, top: 10, scanArgs: "", label: defaultLabel, date: p.date };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--provider") out.provider = argv[++i] ?? "auto";
     else if (a === "--push") out.push = true;
     else if (a === "--no-jev") out.jev = false;
+    else if (a === "--no-swing") out.swing = false;
     else if (a === "--jev-requests") out.jevRequests = Number(argv[++i]);
     else if (a === "--top") out.top = Number(argv[++i]);
     else if (a === "--scan-args") out.scanArgs = argv[++i] ?? "";
@@ -38,7 +46,7 @@ function parseArgs(argv: readonly string[]): Args {
 }
 
 function run(cmd: string, args: readonly string[]): { out: string; ok: boolean } {
-  const r = spawnSync(cmd, args, { shell: true, encoding: "utf8", maxBuffer: 1 << 26, env: process.env });
+  const r = spawnSync([cmd, ...args].join(" "), { shell: true, encoding: "utf8", maxBuffer: 1 << 26, env: process.env });
   const out = `${r.stdout ?? ""}${r.stderr ? "\n" + r.stderr : ""}`.split("\n").filter((l) => !l.includes('"level":"debug"')).join("\n");
   return { out, ok: r.status === 0 };
 }
@@ -74,6 +82,7 @@ function main(): void {
   const args = parseArgs(process.argv.slice(2));
   const p = etParts(Date.now());
   const stamp = `${String(p.hour).padStart(2, "0")}${String(p.minute).padStart(2, "0")}`;
+  const preOpen = p.hour * 60 + p.minute < 9 * 60 + 30;
   const dir = path.join("docs", "daily", args.date);
   fs.mkdirSync(dir, { recursive: true });
   const suffix = args.label ? `-${args.label}` : "";
@@ -91,11 +100,15 @@ function main(): void {
   const providerLine = (gap.out.match(/^Provider: .*$/m) ?? [""])[0];
 
   // 2. Swing scan.
-  say("[2/5] scan:swing");
-  const swing = run("npm", ["run", "scan:swing", "--", "--top", "10", ...(args.scanArgs.includes("--provider") ? [] : ["--provider", args.provider])]);
-  fs.writeFileSync(path.join(dir, `scan-swing${suffix}.txt`), swing.out);
-  const swingVerdict = (swing.out.match(/^Breadth: .*$/m) ?? [""])[0];
-  const swingCands = parseSwingCandidates(swing.out);
+  let swingVerdict = "skipped (--no-swing; the evening verdict stands, daily bars do not change before the open)";
+  let swingCands: string[] = [];
+  if (args.swing) {
+    say("[2/5] scan:swing");
+    const swing = run("npm", ["run", "scan:swing", "--", "--top", "10", ...(args.scanArgs.includes("--provider") ? [] : ["--provider", args.provider])]);
+    fs.writeFileSync(path.join(dir, `scan-swing${suffix}.txt`), swing.out);
+    swingVerdict = (swing.out.match(/^Breadth: .*$/m) ?? [""])[0];
+    swingCands = parseSwingCandidates(swing.out);
+  } else say("[2/5] scan:swing skipped (--no-swing)");
 
   // 3. Headlines for the candidates (Yahoo, no key).
   const symbols = [...new Set([...gapCands.filter((c) => c.star).map((c) => c.symbol), ...gapCands.filter((c) => !c.star).map((c) => c.symbol), ...swingCands])].slice(0, Math.max(args.top, 1));
@@ -139,13 +152,14 @@ function main(): void {
     `# Daily packet ${args.date} ${stamp} ET${args.label ? ` (${args.label})` : ""}`,
     ``,
     providerLine, tape, ``,
-    `Star rows (H-GAP-SECTOR-LONG spec): ${stars.join(", ") || "none"}`,
+    ...(preOpen ? [] : [`After-open run: Gap% is today's move versus the prior close (a recap of today's movers), not tomorrow's pre-market gap. Star flags below are informational only.`]),
+    `Star rows (H-GAP-SECTOR-LONG spec${preOpen ? "" : ", today's move"}): ${stars.join(", ") || "none"}`,
     `Other gap rows: ${gapCands.filter((c) => !c.star).map((c) => `${c.symbol} [${c.table.replace("GAP ", "")}]`).join(", ") || "none"}`,
     `Swing: ${swingVerdict || "n/a"}${swingCands.length ? ` -> ${swingCands.join(", ")}` : ""}`,
     `Jev: ${jevNote}`,
     notes.length ? `Notes: ${notes.join("; ")}` : "",
     ``,
-    `Files: scan-gap${suffix}.txt, scan-swing${suffix}.txt, news${suffix}.md${fs.existsSync(path.join(dir, `jev${suffix}.md`)) ? `, jev${suffix}.md` : ""}`,
+    `Files: scan-gap${suffix}.txt${args.swing ? `, scan-swing${suffix}.txt` : ""}, news${suffix}.md${fs.existsSync(path.join(dir, `jev${suffix}.md`)) ? `, jev${suffix}.md` : ""}`,
     ``,
     "## Forward log", "", "```", logReport, "```", "",
   ].filter((l) => l !== undefined).join("\n");
