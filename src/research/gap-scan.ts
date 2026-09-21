@@ -301,9 +301,11 @@ async function schwabGaps(rest: SchwabRest, symbols: readonly string[], today: s
         priorClose,
         gapPct: (last / priorClose - 1) * 100,
         // Unknown stays null so the volume floor is not applied blindly.
-        pmVolume: extIsToday && typeof ext?.totalVolume === "number" ? ext.totalVolume
-          : preOpen && typeof quote.totalVolume === "number" ? quote.totalVolume
-          : null,
+        pmVolume: preOpen
+          ? (typeof ext?.totalVolume === "number" || typeof quote.totalVolume === "number"
+            ? Math.max(extIsToday ? ext?.totalVolume ?? 0 : 0, quote.totalVolume ?? 0)
+            : null)
+          : extIsToday && typeof ext?.totalVolume === "number" && ext.totalVolume > 0 ? ext.totalVolume : null,
       });
     }
   }
@@ -354,11 +356,15 @@ async function schwabContract(rest: SchwabRest, symbol: string, price: number, r
     const expKey = fridays[0] ?? expKeys[0];
     const target = right === "C" ? price * (1 + otmPct / 100) : price * (1 - otmPct / 100);
     let best: { strike: number; c: { symbol: string; bid: number; ask: number; delta: number; openInterest: number } } | null = null;
+    let fallback: typeof best = null;
     for (const arr of Object.values(map[expKey])) {
       for (const c of arr) {
-        if (!best || Math.abs(c.strikePrice - target) < Math.abs(best.strike - target)) best = { strike: c.strikePrice, c };
+        const otm = right === "C" ? c.strikePrice >= price : c.strikePrice <= price;
+        if (otm && (!best || Math.abs(c.strikePrice - target) < Math.abs(best.strike - target))) best = { strike: c.strikePrice, c };
+        if (!fallback || Math.abs(c.strikePrice - target) < Math.abs(fallback.strike - target)) fallback = { strike: c.strikePrice, c };
       }
     }
+    if (!best) best = fallback;
     if (!best) return null;
     return {
       code: best.c.symbol.replace(/\s+/g, ""),
@@ -398,7 +404,9 @@ async function pickContract(symbol: string, price: number, right: "C" | "P", otm
     const fridays = expiries.filter((e) => e <= maxExpiry && isFriday(`20${e.slice(0, 2)}-${e.slice(2, 4)}-${e.slice(4, 6)}`));
     const expiry = fridays[0] ?? expiries[0];
     const target = right === "C" ? price * (1 + otmPct / 100) : price * (1 - otmPct / 100);
-    const best = parsed.filter((x) => x.expiry === expiry).sort((a, b) => Math.abs(a.strike - target) - Math.abs(b.strike - target))[0];
+    const atExpiry = parsed.filter((x) => x.expiry === expiry);
+    const otm = atExpiry.filter((x) => (right === "C" ? x.strike >= price : x.strike <= price));
+    const best = (otm.length > 0 ? otm : atExpiry).sort((a, b) => Math.abs(a.strike - target) - Math.abs(b.strike - target))[0];
     return {
       code: best.o.option,
       expiry: `20${expiry.slice(0, 2)}-${expiry.slice(2, 4)}-${expiry.slice(4, 6)}`,
@@ -455,7 +463,7 @@ function printTable(title: string, rows: readonly Candidate[]): void {
   process.stdout.write(`  ${"Sym".padEnd(6)}${"Pre-mkt".padStart(9)}${"Gap%".padStart(8)}${"PM vol".padStart(8)}${"PM high".padStart(9)}${"PM low".padStart(9)}${"20d hi".padStart(9)}${"52w hi".padStart(9)} >20d >52w <20dLo ${"ATR".padStart(7)} ${"$vol20".padStart(7)}  Contract\n`);
   for (const r of rows) {
     const c = r.contract;
-    const contract = c === undefined ? "(chains off)" : c === null ? "no listed options" : `${c.code}  ${c.expiry} ${c.strike}${c.right}  ${c.bid.toFixed(2)}/${c.ask.toFixed(2)}${c.delta !== null ? ` d${c.delta.toFixed(2)}` : ""} oi ${c.openInterest}`;
+    const contract = c === undefined ? "(chains off)" : c === null ? "no listed options" : `${c.code}  ${c.expiry} ${c.strike}${c.right}  ${c.bid.toFixed(2)}/${c.ask.toFixed(2)}${c.delta !== null ? ` d${c.delta.toFixed(2)}` : ""} oi ${c.openInterest}${c.openInterest < 50 ? " THIN" : ""}`;
     const pmv = r.pmVolume === null ? "n/a" : r.pmVolume >= 1e6 ? (r.pmVolume / 1e6).toFixed(1) + "M" : (r.pmVolume / 1e3).toFixed(0) + "k";
     process.stdout.write(`  ${r.symbol.padEnd(6)}${r.premarketLast.toFixed(2).padStart(9)}${((r.gapPct >= 0 ? "+" : "") + r.gapPct.toFixed(2)).padStart(8)}${pmv.padStart(8)}${r.premarketHigh.toFixed(2).padStart(9)}${r.premarketLow.toFixed(2).padStart(9)}${r.stats.high20.toFixed(2).padStart(9)}${r.stats.high252.toFixed(2).padStart(9)}  ${r.aboveHigh20 ? "Y" : "-"}    ${r.above52w ? "Y" : "-"}    ${r.belowLow20 ? "Y" : "-"}   ${r.stats.atr14.toFixed(2).padStart(7)} ${(r.stats.avgDollarVol20 / 1e6).toFixed(0).padStart(6)}M  ${contract}\n`);
   }
