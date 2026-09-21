@@ -1,5 +1,9 @@
 # CLAUDE.md -- Gecko (Equity + Option Day Trading Bot)
 
+## Current authorized development path
+
+Read [docs/RESEARCH_MANDATE.md](docs/RESEARCH_MANDATE.md) before trading research. The current user-authorized work is a manual options research desk using a $5,000 planning assumption. Webull is the preferred read-only data source. The operator executes manually; this work does not authorize orders. `npm run dev` and `npm start` launch the data-only desk. Legacy automated strategy, broker and deployment descriptions below are historical context, not evidence of a qualified edge or current deployment readiness. Preserve unsuccessful tests and distinguish underlying diagnostics from actual options performance.
+
 ## Identity
 
 You are working on **Gecko**, an automated day-trading bot for US equities and short-dated options. This is a live trading system that can handle real money. Precision matters. Do not guess. Do not hallucinate endpoints, parameters, or behavior. If you are unsure about an SDK method or API response shape, say so and verify against current docs before writing code.

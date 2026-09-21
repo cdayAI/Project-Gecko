@@ -1,6 +1,24 @@
 # Gecko
 
-An automated day-trading bot for US equities and short-dated (0DTE) options, written in TypeScript. It trades through the Interactive Brokers Client Portal Web API (with a legacy Charles Schwab Trader API client as fallback) and uses Anthropic's Claude API as an intelligence layer to score premarket setups and validate every trade before submission.
+Gecko's current development path is a **manual options research desk**: attributed news, qualified Webull quotes, conditional local alerts, actual-fill journaling and reproducible strategy diagnostics. The operator makes all trading decisions and executes manually. `npm run dev` and `npm start` now enter this data-only desk.
+
+Start with [the manual desk guide](docs/manual-trading-desk.md), [news collection](docs/news-pipeline.md), and [backtesting evidence](docs/manual-backtesting.md). The initial simple underlying ORB diagnostic lost money after its declared costs in both discovery and holdout; no profitable options strategy is established. Live TypeScript Webull qualification and historical options evidence remain external work.
+
+The [research mandate](docs/RESEARCH_MANDATE.md) governs further work. The frozen four-family campaign (`npm run research:edge -- --prepare`, then `--run=<saved-directory>`) compares eight symbols with conservative fills and costs, retains every failed hypothesis, and never calls stock returns options profits. [Historical options acquisition evidence](docs/historical-options-data.md) documents a successfully retrieved public sample and the remaining data requirements.
+
+The [September 17 four-family result](docs/edge-screen-results-2026-09-17.md) rejected every tested hypothesis after costs. This is exploratory underlying evidence, not options P&L; 229 passing software checks do not change that result.
+
+[Current-option valuation research](docs/option-valuation-results-2026-09-17.md) now compares actual delayed option premiums with historical expiry-payoff scenarios and audits the underlying forecast through rolling tests. It identified three preliminary price leads, but weak forecast calibration, cost/risk limits and data gaps prevent trade qualification. `npm run research:value -- --replay=<saved-study-directory>` reproduces the saved experiment.
+
+```sh
+npm ci --ignore-scripts
+npm run build
+npm run desk -- --doctor
+npm run desk:demo
+npm run backtest:manual
+```
+
+The older automated stock/0DTE system remains below for reference, with `legacy:dev` and `legacy:start` entry points. Its reconciliation and hard-risk gaps have not been cleared by the manual-desk checks. The legacy deployment configuration still targets that older application; use the separate manual runbook.
 
 > ## Disclaimer: use at your own risk
 >
@@ -40,7 +58,7 @@ cp .env.example .env
 # Edit .env: set BROKER, ANTHROPIC_API_KEY, and keep LIVE_TRADING=false
 
 npm run build
-npm run dev
+npm run legacy:dev
 ```
 
 With `LIVE_TRADING=false` the bot runs the full pipeline (scanning, signals, risk checks, brain validation) and logs what it *would* do without submitting any orders. Keep it that way until you have validated the system end to end.
