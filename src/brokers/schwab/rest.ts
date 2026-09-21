@@ -19,7 +19,7 @@
 //   - All response shapes validated to the minimum required fields before return.
 
 import { createLogger } from "../../core/logger.js";
-import { fetchWithRetry } from "../../utils/retry.js";
+import { fetchWithRetry, withRetry } from "../../utils/retry.js";
 import type { SchwabAuth } from "./auth.js";
 import type {
   SchwabAccount,
@@ -66,7 +66,11 @@ export interface OptionChainParams {
 }
 
 export class SchwabRest {
-  constructor(private readonly auth: SchwabAuth) {}
+  private readonly marketDataOnly: boolean;
+
+  constructor(private readonly auth: SchwabAuth, options?: { readonly marketDataOnly?: boolean }) {
+    this.marketDataOnly = options?.marketDataOnly === true;
+  }
 
   // ----- Accounts -----
 
@@ -124,6 +128,7 @@ export class SchwabRest {
   // Returns the orderId parsed from the Location header on 201.
   async placeOrder(accountHash: string, order: SchwabOrderRequest): Promise<{ orderId: string }> {
     const url = `${TRADER_BASE}/accounts/${accountHash}/orders`;
+    this.assertRequestAllowed("POST", url);
     const token = await this.auth.getAccessToken();
 
     const controller = new AbortController();
@@ -178,6 +183,7 @@ export class SchwabRest {
   // Cancel an open order.
   async cancelOrder(accountHash: string, orderId: string): Promise<void> {
     const url = `${TRADER_BASE}/accounts/${accountHash}/orders/${orderId}`;
+    this.assertRequestAllowed("DELETE", url);
     const token = await this.auth.getAccessToken();
 
     const controller = new AbortController();
@@ -316,8 +322,34 @@ export class SchwabRest {
 
   // ----- Internals -----
 
+  private assertRequestAllowed(method: string, url: string): void {
+    if (!this.marketDataOnly) return;
+    const parsed = new URL(url);
+    const allowedPaths = ["/marketdata/v1/quotes", "/marketdata/v1/pricehistory", "/marketdata/v1/chains"];
+    if (method !== "GET" || parsed.origin !== "https://api.schwabapi.com" ||
+        parsed.username || parsed.password || !allowedPaths.includes(parsed.pathname)) {
+      throw new Error("Schwab market-data-only client blocked a request outside quotes, price history and option chains");
+    }
+  }
+
   private async get<T>(url: string): Promise<T> {
+    this.assertRequestAllowed("GET", url);
     const token = await this.auth.getAccessToken();
+    if (this.marketDataOnly) {
+      return withRetry(async (signal) => {
+        let response: Response;
+        try {
+          response = await fetch(url, {
+            method: "GET", headers: { Authorization: `Bearer ${token}` }, redirect: "error", signal,
+          });
+        } catch {
+          throw new Error("Schwab market data request failed (network, timeout or redirect)");
+        }
+        if (!response.ok) throw new Error(`Schwab market data HTTP ${response.status}`);
+        try { return await response.json() as T; }
+        catch { throw new Error("Schwab market data returned invalid JSON"); }
+      }, "Schwab market data GET");
+    }
     const resp = await fetchWithRetry(url, {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -325,6 +357,7 @@ export class SchwabRest {
   }
 
   private async post<T>(url: string, body: unknown): Promise<T> {
+    this.assertRequestAllowed("POST", url);
     const token = await this.auth.getAccessToken();
     const resp = await fetchWithRetry(url, {
       method: "POST",

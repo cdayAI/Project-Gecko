@@ -5,9 +5,11 @@
 //   npm run scan:gap -- --min-gap 3 --top 15
 //   npm run scan:gap -- --symbols AMD,HOOD    # explicit list, stats fetched live
 //   npm run scan:gap -- --provider schwab     # Schwab Trader API (thinkorswim data)
+//   npm run schwab:check                      # bounded Schwab connectivity check (no screen)
 //
-// Providers: "auto" (default) uses Schwab when SCHWAB_CLIENT_ID/SECRET are set
-// and data/oauth-tokens.json loads (npm run auth), otherwise Yahoo. Schwab
+// Providers: "auto" (default) uses Schwab when the Windows DPAPI vault or
+// SCHWAB_CLIENT_ID/SECRET plus data/oauth-tokens.json are available, otherwise
+// Yahoo. Schwab
 // batches 100 quotes per request (real-time, with pre-market volume), pulls
 // pre-market high/low from extended-hours minute bars for finalists, and
 // names the contract from the live chain with Greeks. Strike distance is 0.6
@@ -57,10 +59,11 @@ interface Args {
   chains: boolean;
   provider: ProviderChoice;
   minPmVolume: number;                 // Schwab only: pre-market shares traded
+  checkConnection: boolean;            // Schwab only: probe quotes/history/chain and exit
 }
 
 function parseArgs(argv: readonly string[]): Args {
-  const out: Args = { symbols: null, minGapPct: 2.5, top: 12, maxNames: 1500, chains: true, provider: "auto", minPmVolume: 25_000 };
+  const out: Args = { symbols: null, minGapPct: 2.5, top: 12, maxNames: 1500, chains: true, provider: "auto", minPmVolume: 25_000, checkConnection: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--symbols") out.symbols = (argv[++i] ?? "").split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
@@ -70,6 +73,7 @@ function parseArgs(argv: readonly string[]): Args {
     else if (a === "--no-chains") out.chains = false;
     else if (a === "--provider") out.provider = parseProvider(argv[++i]);
     else if (a === "--min-pm-volume") out.minPmVolume = Number(argv[++i]);
+    else if (a === "--check-connection") out.checkConnection = true;
   }
   return out;
 }
@@ -137,7 +141,12 @@ async function main(): Promise<void> {
   // Data source.
   const session = await schwabSession(args.provider);
   const schwab = session.rest;
-  const providerName = schwab ? "schwab (real-time, batch quotes)" : `yahoo (5m bars, no pre-market volume) because ${session.reason}`;
+  if (args.checkConnection) {
+    if (!schwab) throw new Error(`Connection check needs a Schwab session: ${session.reason}`);
+    await checkSchwabConnection(schwab);
+    return;
+  }
+  const providerName = schwab ? `schwab (real-time batch quotes; ${session.reason})` : `yahoo (5m bars, no pre-market volume) because ${session.reason}`;
 
   const startedAt = Date.now();
   const rows: Candidate[] = [];
@@ -190,7 +199,7 @@ async function main(): Promise<void> {
     for (let i = 0; i < list.length; i++) {
       const r = list[i];
       if (schwab) {
-        const range = await schwabPremarketRange(schwab, r.symbol, today);
+        const range = await premarketRange(schwab, yahoo, r.symbol, today, now);
         if (range) list[i] = { ...r, premarketHigh: range.high, premarketLow: range.low };
       }
       if (args.chains) {
@@ -252,6 +261,12 @@ async function gapFor(yahoo: YahooHistoricalBars, symbol: string, today: string,
 interface SchwabQuoteFields {
   readonly lastPrice?: number; readonly closePrice?: number; readonly totalVolume?: number; readonly tradeTime?: number;
 }
+// Before the open, the regular quote's totalVolume is the pre-market volume
+// when no extended block is present.
+function beforeOpenEt(now: number): boolean {
+  const p = etParts(now);
+  return p.hour * 60 + p.minute < 9 * 60 + 30;
+}
 interface SchwabExtended {
   readonly lastPrice?: number; readonly totalVolume?: number; readonly tradeTime?: number;
 }
@@ -260,6 +275,7 @@ interface SchwabExtended {
 // block when it carries a trade from today; the prior close is closePrice.
 async function schwabGaps(rest: SchwabRest, symbols: readonly string[], today: string): Promise<Map<string, Gap>> {
   const out = new Map<string, Gap>();
+  const preOpen = beforeOpenEt(Date.now());
   for (let i = 0; i < symbols.length; i += 100) {
     const chunk = symbols.slice(i, i + 100);
     let batch: Record<string, unknown>;
@@ -284,25 +300,39 @@ async function schwabGaps(rest: SchwabRest, symbols: readonly string[], today: s
         premarketLow: last,
         priorClose,
         gapPct: (last / priorClose - 1) * 100,
-        // Unknown (no extended block) stays null so the volume floor is not applied blindly.
-        pmVolume: ext === undefined ? null : extIsToday ? ext.totalVolume ?? 0 : 0,
+        // Unknown stays null so the volume floor is not applied blindly.
+        pmVolume: extIsToday && typeof ext?.totalVolume === "number" ? ext.totalVolume
+          : preOpen && typeof quote.totalVolume === "number" ? quote.totalVolume
+          : null,
       });
     }
   }
   return out;
 }
 
-// Today's extended-hours minute bars before 09:30 ET.
-async function schwabPremarketRange(rest: SchwabRest, symbol: string, today: string): Promise<{ high: number; low: number } | null> {
+// Pre-market high/low for a finalist: Schwab extended-hours minute bars for
+// today (explicit window from 04:00 ET), falling back to Yahoo's 5-minute
+// pre/post bars when Schwab returns none.
+async function premarketRange(rest: SchwabRest, yahoo: YahooHistoricalBars, symbol: string, today: string, now: number): Promise<{ high: number; low: number; source: string } | null> {
+  const p = etParts(now);
+  const midnightEt = now - ((p.hour * 60 + p.minute) * 60_000 + p.second * 1000 + (now % 1000));
+  const startDate = midnightEt + 4 * 3_600_000;
   try {
-    const h = await rest.getPriceHistory({ symbol, periodType: "day", period: 1, frequencyType: "minute", frequency: 1, needExtendedHoursData: true });
-    const pre = h.candles.filter((c) => { const p = etParts(c.datetime); return p.date === today && p.hour * 60 + p.minute < 9 * 60 + 30; });
-    if (pre.length === 0) return null;
-    return { high: Math.max(...pre.map((c) => c.high)), low: Math.min(...pre.map((c) => c.low)) };
+    const h = await rest.getPriceHistory({ symbol, periodType: "day", frequencyType: "minute", frequency: 1, startDate, endDate: now, needExtendedHoursData: true });
+    const pre = h.candles.filter((c) => { const q = etParts(c.datetime); return q.date === today && q.hour * 60 + q.minute < 9 * 60 + 30; });
+    if (pre.length > 0) return { high: Math.max(...pre.map((c) => c.high)), low: Math.min(...pre.map((c) => c.low)), source: "schwab" };
+    log.debug("Schwab returned no pre-market candles", { symbol, candles: h.candles.length });
   } catch (err) {
     log.debug("Schwab minute bars failed", { symbol, error: err instanceof Error ? err.message : String(err) });
-    return null;
   }
+  try {
+    const bars = await yahoo.fetch({ symbol, interval: "5m", startMs: now - 2 * 86_400_000, endMs: now, includePrePost: true, cache: false });
+    const pre = bars.filter((b) => { const q = etParts(b.timestamp); return q.date === today && q.hour * 60 + q.minute < 9 * 60 + 30; });
+    if (pre.length > 0) return { high: Math.max(...pre.map((b) => b.high)), low: Math.min(...pre.map((b) => b.low)), source: "yahoo" };
+  } catch {
+    // fall through
+  }
+  return null;
 }
 
 // Live chain: nearest expiration at least 7 days out, strike nearest 2.5% OTM.
@@ -315,7 +345,7 @@ async function schwabContract(rest: SchwabRest, symbol: string, price: number, r
       includeUnderlyingQuote: false,
       strategy: "SINGLE",
       fromDate: etParts(now + 7 * 86_400_000).date,
-      toDate: etParts(now + 21 * 86_400_000).date,
+      toDate: etParts(now + 45 * 86_400_000).date,   // wide enough to include the next monthly for names without weeklies
     });
     const map = right === "C" ? chain.callExpDateMap : chain.putExpDateMap;
     const expKeys = Object.keys(map).sort();
@@ -382,6 +412,37 @@ async function pickContract(symbol: string, price: number, right: "C" | "P", otm
   } catch {
     return null;
   }
+}
+
+// Bounded connectivity probe: SPY/QQQ quotes, one day of SPY minute history
+// with extended hours, and a small SPY chain. No screen, no Yahoo, no orders.
+async function checkSchwabConnection(rest: SchwabRest): Promise<void> {
+  const startedAt = Date.now();
+  const positive = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value > 0;
+  const quotes = await rest.getQuotes(["SPY", "QQQ"]);
+  for (const symbol of ["SPY", "QQQ"]) {
+    const q = quotes[symbol];
+    if (!q?.quote || !positive(q.quote.bidPrice) || !positive(q.quote.askPrice) || !positive(q.quote.lastPrice)) throw new Error(`Schwab connection check: missing ${symbol} quote`);
+  }
+  const history = await rest.getPriceHistory({ symbol: "SPY", periodType: "day", period: 1, frequencyType: "minute", frequency: 1, needExtendedHoursData: true });
+  const usable = history.candles.filter((c) => positive(c.datetime) && [c.open, c.high, c.low, c.close].every(positive));
+  const preMarket = usable.filter((c) => { const q = etParts(c.datetime); return q.hour * 60 + q.minute < 9 * 60 + 30; }).length;
+  if (usable.length === 0) throw new Error("Schwab connection check: missing SPY history");
+  const chain = await rest.getOptionChain({ symbol: "SPY", contractType: "ALL", strikeCount: 2, strategy: "SINGLE", fromDate: etParts(startedAt + 7 * 86_400_000).date, toDate: etParts(startedAt + 45 * 86_400_000).date });
+  const contracts = [chain.callExpDateMap, chain.putExpDateMap].flatMap((m) => Object.values(m ?? {})).flatMap((strikes) => Object.values(strikes ?? {})).flat().filter((c) => positive(c.strikePrice) && positive(c.ask));
+  if (contracts.length === 0) throw new Error("Schwab connection check: missing SPY option contracts");
+  const quoteChecks = ["SPY", "QQQ"].map((symbol) => {
+    const q = quotes[symbol];
+    const t = q.quote.quoteTime;
+    const ext = (q as { extended?: { totalVolume?: number; tradeTime?: number } }).extended;
+    return { symbol, quoteTimeUtc: positive(t) ? new Date(t).toISOString() : null, ageSeconds: positive(t) ? Math.round((Date.now() - t) / 1000) : null, extendedBlock: ext !== undefined, extendedVolume: ext?.totalVolume ?? null };
+  });
+  process.stdout.write(`${JSON.stringify({
+    status: "CONNECTED", checkedAtUtc: new Date().toISOString(), scope: "market-data-only",
+    quotes: quoteChecks, history: { symbol: history.symbol, usableCandles: usable.length, preMarketCandles: preMarket },
+    chain: { symbol: chain.symbol, reportedContracts: chain.numberOfContracts, usableContracts: contracts.length, isDelayed: typeof chain.isDelayed === "boolean" ? chain.isDelayed : null },
+    qualification: "Connectivity only; no screening, orders or trade qualification.",
+  }, null, 2)}\n`);
 }
 
 function isFriday(isoDate: string): boolean {
