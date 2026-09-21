@@ -274,3 +274,42 @@ puller now includes the sector ETFs and the grid reads them from the
 store. The 52-week structure used fewer than 252 prior sessions for
 March signals (400-day daily lookback); now 600 days. Neither defect
 affects the base-rule or gap-size conclusions.
+
+## Store rerun with sector ETFs and full history (2026-09-21, ~21:40 UTC)
+
+docs/results/gap-grid-store2.txt and .csv. Same 2,912 contexts and 123
+sessions; sector confirmation now covers the whole window and the
+52-week structure uses a full 252 prior sessions.
+
+- Sector confirmation, one lever from base: selection n=533, 37.3% win,
+  PF 0.74; validation n=489, 40.9%, PF 0.76. It does not help the base
+  rule.
+- 52-week structure: selection 43.7% / PF 0.74; validation 47.9% / PF
+  1.08. Weak.
+- Regime cut (SPY vs 50-day, descriptive): 10%+ gaps, both directions,
+  SPY above: all n=254, 48.8% win, +0.01%, PF 1.01 (selection PF 0.75,
+  validation PF 1.76); SPY below: n=60, 50.0%, +0.22%, PF 1.15
+  (selection PF 2.04 on 24, validation PF 0.78 on 36). No consistent
+  regime story; the 10%+ tier is about breakeven over six months.
+- Eligible variants: 2 of 480. The criterion's pick (10%+, 52-week,
+  both directions, +1% target, pre-market stop) fails validation again
+  (n=41, 63.4% win, -0.26%, PF 0.69). The other eligible variant is the
+  only one positive in both halves:
+
+  gap >= 10%, above the prior 20-session high, LONG only, sector ETF
+  09:30 candle green, base exits (stop through the 09:30 low, +1 ATR
+  half, +1.5 ATR rest, out 15:45), confirmation by 11:30:
+  selection n=63, 52.4% win, +0.45%/trade, PF 1.31;
+  validation n=50, 58.0% win, +0.42%/trade, PF 1.29;
+  about 0.9 signals per session.
+
+### Final status of the family
+
+H-GAP-GO and every win-rate variant: NOT QUALIFIED. The single surviving
+specification (H-GAP-SECTOR-LONG) is recorded as a forward-test
+hypothesis with two explicit cautions: it was not the pre-declared
+criterion's choice, and one survivor among 480 correlated variants at
+n=63/50 is consistent with chance. Expected profile if real: about 55%
+win, +0.4% per trade on the stock, profit factor about 1.3, one trade a
+day. Not a high-win-rate strategy. The scanner labels this specification
+on its rows so the forward log can score it; small size only.

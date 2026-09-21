@@ -128,3 +128,20 @@ ATR variants), expectancy about zero. Same shape as the 40-session
 pilot: high win rates for H-FILL, losers about twice the size of
 winners, negative or zero expectancy at 10 bps. Both hypotheses fail
 their gates again. Dropped at these definitions.
+
+## Store rerun with full history: 123 sessions (2026-09-21, ~21:45 UTC)
+
+docs/results/mr-store2.txt and .jsonl. 180,397 name-sessions, 2026-03-25
+through 2026-09-18, median split at 2026-06-22, 10 bps per side.
+
+Every variant is negative in both halves. H-FILL: win rates 50.7 to 65.6%,
+profit factors 0.60 to 0.76; the 69-session validation glimmer for the
+open - 0.5 ATR variant (PF 1.06) is PF 0.72 on 123 sessions. Ten-slot
+books PF 0.66 to 0.85. H-DIP: 37 to 40% win, PF 0.51 to 0.55.
+
+FINAL: both hypotheses fail on six months of intraday data across 1,500
+names. Intraday dip buying at these definitions has the win rate the
+operator asked for and loses money after costs because losers are about
+twice the size of winners. Dropped. Any future intraday mean-reversion
+test needs a different mechanism (event-driven, or liquidity-driven with
+volume conditions), not different thresholds on these.

@@ -34,6 +34,7 @@ import { createLogger, setLogLevel } from "../core/logger.js";
 import type { SchwabRest } from "../brokers/schwab/rest.js";
 import { parseProvider, schwabSession, type ProviderChoice } from "./schwab-session.js";
 import { pickCboeContract, pickSchwabContract, type ContractPick } from "./contract-pick.js";
+import { sectorFor } from "./sectors.js";
 import { etParts } from "../utils/time.js";
 import { YahooHistoricalBars } from "../data/yahoo-historical.js";
 import { loadUniverse, statsFromDaily, type UniverseEntry } from "./universe.js";
@@ -99,6 +100,9 @@ interface Candidate {
   readonly aboveHigh20: boolean;
   readonly above52w: boolean;
   readonly belowLow20: boolean;
+  readonly sector: string;
+  readonly sectorGapPct: number | null;     // sector ETF pre-market gap
+  readonly spec: boolean;                   // H-GAP-SECTOR-LONG: gap >= 10%, above 20d high, long, sector ETF green
   readonly score: number;
   contract?: ContractPick | null;    // filled for finalists; null = no listed options found
 }
@@ -173,7 +177,10 @@ async function main(): Promise<void> {
       const above52w = g.premarketLast > stats.high252;
       const belowLow20 = g.premarketLast < stats.low20;
       const structure = g.gapPct > 0 ? (aboveHigh20 ? 3 : 0) + (above52w ? 4 : 0) : (belowLow20 ? 3 : 0);
-      rows.push({ symbol, ...g, stats, aboveHigh20, above52w, belowLow20, score: Math.abs(g.gapPct) + structure });
+      const sector = sectorFor(symbol);
+      const sectorGapPct = gaps.get(sector)?.gapPct ?? null;
+      const spec = g.gapPct >= 10 && aboveHigh20 && sectorGapPct !== null && sectorGapPct > 0;
+      rows.push({ symbol, ...g, stats, aboveHigh20, above52w, belowLow20, sector, sectorGapPct, spec, score: Math.abs(g.gapPct) + structure + (spec ? 5 : 0) });
     } catch {
       failed++;
     }
@@ -212,7 +219,7 @@ async function main(): Promise<void> {
   printTable("GAP UP: WATCH (5-10%; no edge in the tests)", ups.filter((r) => r.gapPct < TRADE_GAP));
   printTable(`GAP DOWN: LARGE (gap <= -${TRADE_GAP}%; forward test only)`, downs.filter((r) => r.gapPct <= -TRADE_GAP));
   printTable("GAP DOWN: WATCH (-5 to -10%)", downs.filter((r) => r.gapPct > -TRADE_GAP));
-  process.stdout.write(`\nEntry rule (H-GAP-GO as registered; see docs/gap-and-go-registration-2026-09-21.md): no pre-market orders. Enter on the first 5-minute candle that CLOSES beyond the pre-market extreme (earliest 09:35). Stop: 5-minute close back through the 09:30 candle's opposite extreme. Targets: 1 ATR (half), 1.5 ATR (rest). Time exit 15:45. Skip if the open is more than 1.5% beyond the pre-market extreme. Status after the six-month Schwab-history test (docs/gap-and-go-registration-2026-09-21.md): the rule is NOT a qualified edge. Base rule lost in both halves (PF 0.73 / 0.78); the 10%+ tier was +0.55%/trade (54% win) from late June to September and -0.28% from March to June. Treat every row as a forward-test candidate at small size, never a system; log fills. Tighter targets, time exits, wider stops and sector confirmation all failed out of sample; do not improvise them.\n`);
+  process.stdout.write(`\nEntry rule (H-GAP-GO as registered; see docs/gap-and-go-registration-2026-09-21.md): no pre-market orders. Enter on the first 5-minute candle that CLOSES beyond the pre-market extreme (earliest 09:35). Stop: 5-minute close back through the 09:30 candle's opposite extreme. Targets: 1 ATR (half), 1.5 ATR (rest). Time exit 15:45. Skip if the open is more than 1.5% beyond the pre-market extreme. Status after the six-month Schwab-history test (docs/gap-and-go-registration-2026-09-21.md): the family is NOT a qualified edge (base rule PF 0.73 / 0.78 in both halves). Rows marked * meet the one specification that was positive in both halves of 123 sessions (H-GAP-SECTOR-LONG: gap >= 10%, above the 20-day high, LONG, sector ETF up pre-market): 55% win, about +0.4%/trade on the stock, PF 1.3, roughly one a day, and possibly chance (one survivor of 480 variants). Forward test those at small size and log every fill; treat unmarked rows as watch only. Tighter targets, time exits, wider stops did not survive; do not improvise them.\n`);
   process.stdout.write(schwab
     ? `Option marks are live from Schwab. Pay at most 10% over the mid at entry. Max loss is the full premium; the stop lives on the stock.\n\n`
     : `Option marks shown are the chain's last marks (prior close before 09:30). Read the live quote at 09:30 and pay at most 10% over that mid. Max loss is the full premium; the stop lives on the stock.\n\n`);
@@ -377,12 +384,13 @@ function historicalBucket(r: Candidate): string {
 function printTable(title: string, rows: readonly Candidate[]): void {
   process.stdout.write(`\n${title}\n`);
   if (rows.length === 0) { process.stdout.write("  none\n"); return; }
-  process.stdout.write(`  ${"Sym".padEnd(6)}${"Pre-mkt".padStart(9)}${"Gap%".padStart(8)}${"PM vol".padStart(8)}${"PM high".padStart(9)}${"PM low".padStart(9)}${"20d hi".padStart(9)}${"52w hi".padStart(9)} >20d >52w <20dLo ${"ATR".padStart(7)} ${"$vol20".padStart(7)}  Contract  |  historical bucket\n`);
+  process.stdout.write(`  ${"Sym".padEnd(6)}${"Pre-mkt".padStart(9)}${"Gap%".padStart(8)}${"PM vol".padStart(8)}${"PM high".padStart(9)}${"PM low".padStart(9)}${"20d hi".padStart(9)}${"52w hi".padStart(9)} >20d >52w <20dLo ${"ATR".padStart(7)} ${"$vol20".padStart(7)} ${"Sector".padEnd(11)} Contract  |  historical bucket\n`);
   for (const r of rows) {
     const c = r.contract;
     const contract = c === undefined ? "(chains off)" : c === null ? "no listed options" : `${c.code}  ${c.expiry} ${c.strike}${c.right}  ${c.bid.toFixed(2)}/${c.ask.toFixed(2)}${c.delta !== null ? ` d${c.delta.toFixed(2)}` : ""} oi ${c.openInterest}${c.openInterest < 50 ? " THIN" : ""}`;
     const pmv = r.pmVolume === null ? "n/a" : r.pmVolume >= 1e6 ? (r.pmVolume / 1e6).toFixed(1) + "M" : (r.pmVolume / 1e3).toFixed(0) + "k";
-    process.stdout.write(`  ${r.symbol.padEnd(6)}${r.premarketLast.toFixed(2).padStart(9)}${((r.gapPct >= 0 ? "+" : "") + r.gapPct.toFixed(2)).padStart(8)}${pmv.padStart(8)}${r.premarketHigh.toFixed(2).padStart(9)}${r.premarketLow.toFixed(2).padStart(9)}${r.stats.high20.toFixed(2).padStart(9)}${r.stats.high252.toFixed(2).padStart(9)}  ${r.aboveHigh20 ? "Y" : "-"}    ${r.above52w ? "Y" : "-"}    ${r.belowLow20 ? "Y" : "-"}   ${r.stats.atr14.toFixed(2).padStart(7)} ${(r.stats.avgDollarVol20 / 1e6).toFixed(0).padStart(6)}M  ${contract}  |  ${historicalBucket(r)}\n`);
+    const sec = `${r.sector} ${r.sectorGapPct === null ? "n/a" : (r.sectorGapPct >= 0 ? "+" : "") + r.sectorGapPct.toFixed(1) + "%"}`;
+    process.stdout.write(`  ${(r.spec ? "*" : " ") + r.symbol.padEnd(5)}${r.premarketLast.toFixed(2).padStart(9)}${((r.gapPct >= 0 ? "+" : "") + r.gapPct.toFixed(2)).padStart(8)}${pmv.padStart(8)}${r.premarketHigh.toFixed(2).padStart(9)}${r.premarketLow.toFixed(2).padStart(9)}${r.stats.high20.toFixed(2).padStart(9)}${r.stats.high252.toFixed(2).padStart(9)}  ${r.aboveHigh20 ? "Y" : "-"}    ${r.above52w ? "Y" : "-"}    ${r.belowLow20 ? "Y" : "-"}   ${r.stats.atr14.toFixed(2).padStart(7)} ${(r.stats.avgDollarVol20 / 1e6).toFixed(0).padStart(6)}M ${sec.padEnd(11)} ${contract}  |  ${historicalBucket(r)}\n`);
   }
 }
 
