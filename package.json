@@ -27,7 +27,8 @@
     "scan:gap": "node --import tsx src/research/gap-scan.ts",
     "schwab:check": "node --import tsx src/research/gap-scan.ts --provider schwab --check-connection",
     "schwab:selftest": "node --import tsx src/brokers/schwab/windows-vault-selftest.ts && node --import tsx src/brokers/schwab/rest-readonly-selftest.ts",
-    "universe:build": "node --import tsx src/research/universe.ts"
+    "universe:build": "node --import tsx src/research/universe.ts",
+    "backtest:gapgo": "node --import tsx src/backtest/gap-and-go-cli.ts"
   },
   "dependencies": {
     "dotenv": "^16",
