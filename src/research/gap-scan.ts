@@ -299,7 +299,8 @@ async function schwabGaps(rest: SchwabRest, symbols: readonly string[], today: s
         premarketLow: last,
         priorClose,
         gapPct: (last / priorClose - 1) * 100,
-        pmVolume: extIsToday ? ext?.totalVolume ?? 0 : 0,
+        // Unknown (no extended block) stays null so the volume floor is not applied blindly.
+        pmVolume: ext === undefined ? null : extIsToday ? ext.totalVolume ?? 0 : 0,
       });
     }
   }
