@@ -68,3 +68,30 @@ by construction and do not count as independent confirmation.
 Record per trade: no trigger / triggered and filled (price, quantity) /
 triggered and not filled / cancelled; exit price and reason; net of fees.
 Review after Friday's close.
+
+## Rule change and record (added 2026-09-21 ~10:00 ET)
+
+Record: operator watched Monday; no trades taken. AMD, HOOD and META
+gapped through their cancel lines overnight after the US-China talks were
+called successful (NQ +0.9%, SMH +1.8% pre-market, bitcoin +5%). Under the
+sheet's 09:45 opening-range rule, AMD's move (584 at 09:30 to 604 by
+09:45, a new all-time high) happened entirely inside the hands-off window.
+HOOD failed its 123.50 line in the first 15 minutes and was correctly not
+traded.
+
+New rule for catalyst gaps above prior highs (agreed 2026-09-21): no
+pre-market orders; enter on the first 5-minute candle that closes above
+the pre-market high, earliest 09:35, with the sector ETF green. Stop is a
+5-minute close below the 09:30 candle low. Targets +1 ATR (half) and
++1.5 ATR (rest). Time exit 15:45. Skip if the open is more than 1.5%
+above the pre-market high or the sector ETF is red at 09:35. Today that
+would have been AMD at 585.97 on the 09:30 close (pre-market high
+582.37), stop 582.27, and 604 by 09:45. The 09:45 range-break rule stays
+for everything that is not a catalyst gap. Neither rule is measured; both
+are logged from here so the comparison can be made on real fills.
+
+Tooling: `npm run scan:gap` (src/research/gap-scan.ts) ranks pre-market
+gaps across the universe with structure and sector confirmation and names
+the option contract to load before the open. Run it 08:00-09:25 ET.
+Prerequisite the operator controls: options buying power must be settled
+before the open, or the setup can only be taken in shares.
