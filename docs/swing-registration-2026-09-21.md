@@ -77,3 +77,73 @@ hypothesis is recorded and not built.
   intraday stop is modeled. Entries at the next open include the
   overnight gap after the signal.
 - Long only. Short versions are not tested here.
+
+## Results (2026-09-21, ~18:40 UTC)
+
+Runs completed over 1,691 names with usable history (43 had fewer than 260
+sessions), signal window 2024-07-12 through 2026-09-21, base 10 bps per
+side and a 20 bps stress. Full per-slice output is in the session log;
+the gate-relevant lines:
+
+| Line | n | Win | Expectancy | PF | Net at $1k/trade |
+|---|---:|---:|---:|---:|---:|
+| H-PULL all | 4,350 | 39.3% | -0.04% | 0.99 | -$1,741 |
+| H-PULL gated (SPY > 50d) | 3,227 | 38.9% | +0.05% | 1.02 | +$1,623 (without best month -$2,868) |
+| H-PULL all at 20 bps | 4,350 | 38.2% | -0.24% | 0.92 | -$10,574 |
+| H-BOUNCE all | 17,317 | 60.9% | +0.26% | 1.17 | +$45,141 |
+| H-BOUNCE all at 20 bps | 17,317 | 58.1% | +0.06% | 1.04 | +$10,093 |
+| H-BOUNCE all without best month (2026-07) | | | | | +$32,360 |
+| H-BOUNCE best symbol share (NBIS) | | | | | 3% of net |
+| H-BOUNCE gated (SPY > 50d) | 11,983 | 58.6% | +0.07% | 1.05 | +$8,881 (at 20 bps -$15,316) |
+| H-BOUNCE when SPY < 50d | 5,334 | 66.0% | +0.68% | 1.45 | +$36,260 (at 20 bps +$25,408) |
+| H-BOUNCE 5-slot book, ranked by drop, ungated | 730 | 55.8% | -0.11% | 0.94 | -$803 |
+
+H-BOUNCE quarters (all): 2024Q3 +0.52, Q4 +0.06, 2025Q1 -0.37, Q2 +0.89,
+Q3 +0.37, Q4 +0.16, 2026Q1 -0.04, Q2 +0.37, Q3 +0.71 (percent per trade).
+Exit mix: target 75%, stop 8%, time 16%; average hold 3.3 sessions.
+
+### Gate evaluation
+
+H-PULL fails (negative ungated, gated result depends on one month and
+one symbol, negative at double cost). NOT QUALIFIED. Not built.
+
+H-BOUNCE (ungated) passes every registered gate: n far above 100,
+expectancy +0.26%, profit factor 1.17, positive in at least three of
+every four consecutive quarters, positive at double cost (+0.06%, PF
+1.04, thin), positive without the best month, best symbol 3% of net.
+QUALIFIED for research priority and for a scan. The SPY > 50-day gate
+made it worse, not better; the registered gate direction was wrong for
+a liquidity-provision strategy.
+
+### Observations retained (post hoc), and what was built from them
+
+- Ranked by size of drop, a 5-slot book was negative without any gate.
+  Cutting the same trades by how many names qualified that day
+  (breadth) explains it: fewer than 10 signals a day, -1.13% per trade
+  (PF 0.56); 10-29, -0.19%; 30-74, +0.15%; 75 or more, +0.76% (PF 1.59).
+  Breadth 30+ with drops of 2.5 ATR or more: +0.91%, PF 1.77, n=2,802.
+  A 5-slot book taken only on breadth >= 30 days, ranked by drop: +0.40%
+  per trade, PF 1.25, n=424 over 134 days; on breadth >= 75 days +0.84%,
+  PF 1.67, n=175 over 38 days. Mechanism: market-wide oversold days
+  bounce; isolated large drops are news and continue.
+- Drop size is monotonic on its own (1.5-2 ATR +0.08%, 2-3 +0.37%,
+  3+ +0.90%), the opposite of the earlier adverse-selection guess.
+- Results conditioned on holding period are look-ahead and not usable.
+- Built: `npm run scan:swing` (src/research/swing-scan.ts). Prints the
+  breadth count with a TRADE / STAND ASIDE verdict at 30 (strong at 75),
+  the SPY regime, and candidates ranked by drop with an at-the-money
+  call 14-35 days out. The breadth gate is a post-hoc finding and is
+  registered here as H-BOUNCE-2 for forward testing; the scan shows it
+  as guidance, and every signal day is logged with its breadth so the
+  forward record can confirm or reject it.
+
+### Limits
+
+Survivorship: the universe is today's liquid names, which flatters a
+dip-buying strategy (names that fell out after a "dip" are absent). The
+effect size is unknown; the forward log is the correction. Entries and
+exits carry overnight gaps; no intraday stop. Long only. The option
+version is untested: an average edge of a few tenths of a percent per
+trade over three sessions is a stock result; at-the-money calls on
+breadth days with 2.5+ ATR drops are the only slice where an option
+plausibly clears its spread, and that is a hypothesis.

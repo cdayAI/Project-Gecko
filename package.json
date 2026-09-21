@@ -29,7 +29,8 @@
     "schwab:selftest": "node --import tsx src/brokers/schwab/windows-vault-selftest.ts && node --import tsx src/brokers/schwab/rest-readonly-selftest.ts",
     "universe:build": "node --import tsx src/research/universe.ts",
     "backtest:gapgo": "node --import tsx src/backtest/gap-and-go-cli.ts",
-    "backtest:swing": "node --import tsx src/backtest/swing-cli.ts"
+    "backtest:swing": "node --import tsx src/backtest/swing-cli.ts",
+    "scan:swing": "node --import tsx src/research/swing-scan.ts"
   },
   "dependencies": {
     "dotenv": "^16",
