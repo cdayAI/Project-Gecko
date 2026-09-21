@@ -19,6 +19,7 @@ import { createLogger, setLogLevel } from "../core/logger.js";
 import { etParts } from "../utils/time.js";
 import { YahooHistoricalBars } from "../data/yahoo-historical.js";
 import { loadUniverse } from "../research/universe.js";
+import { SECTOR_ETFS, sectorFor } from "../research/sectors.js";
 import type { Bar } from "../core/types.js";
 
 const log = createLogger("gap-and-go");
@@ -29,10 +30,12 @@ interface Args {
   slippageBps: number;
   out: string;
   lookbackDays: number;
+  grid: boolean;
+  gridOut: string;
 }
 
 function parseArgs(argv: readonly string[]): Args {
-  const out: Args = { maxNames: 1500, minGapPct: 3, slippageBps: 5, out: "", lookbackDays: 59 };
+  const out: Args = { maxNames: 1500, minGapPct: 3, slippageBps: 5, out: "", lookbackDays: 59, grid: false, gridOut: "" };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--max-names") out.maxNames = Number(argv[++i]);
@@ -40,6 +43,8 @@ function parseArgs(argv: readonly string[]): Args {
     else if (a === "--slippage-bps") out.slippageBps = Number(argv[++i]);
     else if (a === "--out") out.out = argv[++i] ?? "";
     else if (a === "--lookback") out.lookbackDays = Number(argv[++i]);
+    else if (a === "--grid") out.grid = true;
+    else if (a === "--grid-out") out.gridOut = argv[++i] ?? "";
   }
   return out;
 }
@@ -74,6 +79,7 @@ async function main(): Promise<void> {
   const yahoo = new YahooHistoricalBars();
   const now = Date.now();
   const slip = args.slippageBps / 10_000;
+  if (args.grid) { await runGrid(names, yahoo, now, args); return; }
 
   const trades: GapGoTrade[] = [];
   let sessionsSeen = new Set<string>();
@@ -233,6 +239,177 @@ function averageTrueRange(bars: readonly Bar[], n: number): number {
 function minutesEt(ts: number): number { const p = etParts(ts); return p.hour * 60 + p.minute; }
 function hhmm(ts: number): string { const p = etParts(ts); return `${String(p.hour).padStart(2, "0")}:${String(p.minute).padStart(2, "0")}`; }
 function fmt(n: number): string { return `${n >= 0 ? "+" : "-"}$${Math.abs(n).toFixed(0)}`; }
+
+// ----- H-GAP-WR grid (docs/gap-and-go-registration-2026-09-21.md) -----
+
+const SELECTION_END = "2026-08-20";      // sessions on or before: selection; after: validation
+const WINDOW_END = "2026-09-18";         // the partial 2026-09-21 session is excluded
+
+interface Ctx {
+  readonly symbol: string;
+  readonly date: string;
+  readonly direction: "LONG" | "SHORT";
+  readonly gapPct: number;
+  readonly beyond20: boolean;
+  readonly beyond252: boolean;
+  readonly rth: readonly Bar[];
+  readonly pmHigh: number;
+  readonly pmLow: number;
+  readonly atr: number;
+  readonly sectorAgrees: boolean;
+}
+
+type ExitRule = "atr" | "pct1" | "pct2" | "t1030" | "t1200";
+type StopRef = "0930" | "pm";
+type Cutoff = "0940" | "1130";
+interface Variant { minGap: number; structure: "20d" | "252d"; direction: "long" | "both"; exit: ExitRule; stop: StopRef; cutoff: Cutoff; sector: boolean }
+
+async function runGrid(names: readonly string[], yahoo: YahooHistoricalBars, now: number, args: Args): Promise<void> {
+  const slip = args.slippageBps / 10_000;
+  const startedAt = Date.now();
+
+  // Sector ETF 09:30-candle direction per date: close of the first RTH bar vs prior session close.
+  const etfGreen = new Map<string, Map<string, boolean>>();
+  for (const etf of SECTOR_ETFS) {
+    const bars = await yahoo.fetch({ symbol: etf, interval: "5m", startMs: now - args.lookbackDays * 86_400_000, endMs: now, includePrePost: true });
+    const byDate = groupByDate(bars);
+    const dates = [...byDate.keys()].sort();
+    const m = new Map<string, boolean>();
+    for (let i = 1; i < dates.length; i++) {
+      const prev = byDate.get(dates[i - 1])!.filter((b) => minutesEt(b.timestamp) >= OPEN_MIN && minutesEt(b.timestamp) < 16 * 60);
+      const cur = byDate.get(dates[i])!.filter((b) => minutesEt(b.timestamp) >= OPEN_MIN);
+      if (prev.length === 0 || cur.length === 0) continue;
+      m.set(dates[i], cur[0].close > prev[prev.length - 1].close);
+    }
+    etfGreen.set(etf, m);
+  }
+
+  // One context per (symbol, session) meeting the loosest screen (3%, beyond 20-day).
+  const ctxs: Ctx[] = [];
+  let failed = 0;
+  for (let i = 0; i < names.length; i++) {
+    const symbol = names[i];
+    try {
+      const intraday = await yahoo.fetch({ symbol, interval: "5m", startMs: now - args.lookbackDays * 86_400_000, endMs: now, includePrePost: true });
+      const daily = await yahoo.fetch({ symbol, interval: "1d", startMs: now - 400 * 86_400_000, endMs: now, includePrePost: false });
+      const byDate = groupByDate(intraday);
+      const dailyByDate = daily.map((b) => ({ date: etParts(b.timestamp).date, b }));
+      for (const [date, bars] of byDate) {
+        if (date > WINDOW_END) continue;
+        const prior = dailyByDate.filter((d) => d.date < date).map((d) => d.b);
+        if (prior.length < 30) continue;
+        const priorClose = prior[prior.length - 1].close;
+        const w20 = prior.slice(-20), w252 = prior.slice(-252);
+        const pre = bars.filter((b) => minutesEt(b.timestamp) < OPEN_MIN);
+        const rth = bars.filter((b) => minutesEt(b.timestamp) >= OPEN_MIN && minutesEt(b.timestamp) < 16 * 60);
+        if (pre.length === 0 || rth.length < 10) continue;
+        const pmLast = pre[pre.length - 1].close;
+        const gapPct = (pmLast / priorClose - 1) * 100;
+        if (Math.abs(gapPct) < 3) continue;
+        const direction: "LONG" | "SHORT" = gapPct > 0 ? "LONG" : "SHORT";
+        const beyond20 = direction === "LONG" ? pmLast > Math.max(...w20.map((b) => b.high)) : pmLast < Math.min(...w20.map((b) => b.low));
+        if (!beyond20) continue;
+        const beyond252 = direction === "LONG" ? pmLast > Math.max(...w252.map((b) => b.high)) : pmLast < Math.min(...w252.map((b) => b.low));
+        const pmHigh = Math.max(...pre.map((b) => b.high)), pmLow = Math.min(...pre.map((b) => b.low));
+        const open = rth[0].open;
+        if (direction === "LONG" && open > pmHigh * (1 + OPEN_CHASE_PCT / 100)) continue;
+        if (direction === "SHORT" && open < pmLow * (1 - OPEN_CHASE_PCT / 100)) continue;
+        const green = etfGreen.get(sectorFor(symbol))?.get(date);
+        const sectorAgrees = green === undefined ? false : direction === "LONG" ? green : !green;
+        ctxs.push({ symbol, date, direction, gapPct, beyond20, beyond252, rth, pmHigh, pmLow, atr: averageTrueRange(prior, 14), sectorAgrees });
+      }
+    } catch { failed++; }
+    if ((i + 1) % 300 === 0) process.stdout.write(`  contexts: ${i + 1}/${names.length} names, ${ctxs.length} candidates, ${((Date.now() - startedAt) / 60_000).toFixed(1)} min\n`);
+  }
+  const sessions = [...new Set(ctxs.map((c) => c.date))].sort();
+  process.stdout.write(`\n===== H-GAP-WR grid: ${ctxs.length} candidate contexts over ${sessions.length} sessions (${sessions[0]} to ${sessions[sessions.length - 1]}), ${failed} failed, slippage ${args.slippageBps} bps/side =====\nSelection: sessions <= ${SELECTION_END}; validation after. Criterion: highest selection win rate with PF >= 1.30, expectancy > 0, n >= 60.\n`);
+
+  const base: Variant = { minGap: 3, structure: "20d", direction: "both", exit: "atr", stop: "0930", cutoff: "1130", sector: false };
+  const variants: Variant[] = [];
+  for (const minGap of [3, 5, 10]) for (const structure of ["20d", "252d"] as const) for (const direction of ["long", "both"] as const)
+    for (const exit of ["atr", "pct1", "pct2", "t1030", "t1200"] as const) for (const stop of ["0930", "pm"] as const) for (const cutoff of ["0940", "1130"] as const) for (const sector of [false, true])
+      variants.push({ minGap, structure, direction, exit, stop, cutoff, sector });
+
+  interface Res { v: Variant; key: string; sel: GStat; val: GStat; all: GStat }
+  const evaluate = (v: Variant): Res => {
+    const rets: { date: string; r: number }[] = [];
+    for (const c of ctxs) {
+      if (Math.abs(c.gapPct) < v.minGap) continue;
+      if (v.structure === "252d" && !c.beyond252) continue;
+      if (v.direction === "long" && c.direction === "SHORT") continue;
+      if (v.sector && !c.sectorAgrees) continue;
+      const r = manageGrid(c, v, slip);
+      if (r !== null) rets.push({ date: c.date, r });
+    }
+    return { v, key: variantKey(v), sel: gstat(rets.filter((x) => x.date <= SELECTION_END).map((x) => x.r)), val: gstat(rets.filter((x) => x.date > SELECTION_END).map((x) => x.r)), all: gstat(rets.map((x) => x.r)) };
+  };
+  const results = variants.map(evaluate);
+  if (args.gridOut) {
+    const rows = ["minGap,structure,direction,exit,stop,cutoff,sector,selN,selWin,selExp,selPF,valN,valWin,valExp,valPF,allN,allWin,allExp,allPF",
+      ...results.map((r) => [r.v.minGap, r.v.structure, r.v.direction, r.v.exit, r.v.stop, r.v.cutoff, r.v.sector, r.sel.n, r.sel.win.toFixed(1), r.sel.exp.toFixed(2), r.sel.pf.toFixed(2), r.val.n, r.val.win.toFixed(1), r.val.exp.toFixed(2), r.val.pf.toFixed(2), r.all.n, r.all.win.toFixed(1), r.all.exp.toFixed(2), r.all.pf.toFixed(2)].join(","))];
+    fs.mkdirSync(path.dirname(args.gridOut), { recursive: true });
+    fs.writeFileSync(args.gridOut, rows.join("\n") + "\n");
+  }
+  const line = (r: Res): string => `${r.key.padEnd(62)} SEL n=${String(r.sel.n).padStart(4)} win ${r.sel.win.toFixed(1).padStart(5)}% exp ${gp(r.sel.exp)} PF ${r.sel.pf.toFixed(2)} | VAL n=${String(r.val.n).padStart(4)} win ${r.val.win.toFixed(1).padStart(5)}% exp ${gp(r.val.exp)} PF ${r.val.pf.toFixed(2)}`;
+
+  process.stdout.write(`\nBase variant:\n  ${line(evaluate(base))}\n`);
+  process.stdout.write(`\nOne lever at a time (from base):\n`);
+  const levers: Partial<Variant>[] = [{ minGap: 5 }, { minGap: 10 }, { structure: "252d" }, { direction: "long" }, { exit: "pct1" }, { exit: "pct2" }, { exit: "t1030" }, { exit: "t1200" }, { stop: "pm" }, { cutoff: "0940" }, { sector: true }];
+  for (const l of levers) process.stdout.write(`  ${line(evaluate({ ...base, ...l }))}\n`);
+
+  const eligible = results.filter((r) => r.sel.n >= 60 && r.sel.pf >= 1.3 && r.sel.exp > 0).sort((a, b) => b.sel.win - a.sel.win);
+  process.stdout.write(`\nTop 12 eligible by selection win rate (${eligible.length} of ${results.length} variants eligible):\n`);
+  for (const r of eligible.slice(0, 12)) process.stdout.write(`  ${line(r)}\n`);
+  process.stdout.write(`\nTop 8 by VALIDATION win rate among eligible (for the record; not the selection rule):\n`);
+  for (const r of [...eligible].sort((a, b) => b.val.win - a.val.win).slice(0, 8)) process.stdout.write(`  ${line(r)}\n`);
+  if (eligible[0]) process.stdout.write(`\nCHOSEN: ${eligible[0].key}\n  validation: n=${eligible[0].val.n} win ${eligible[0].val.win.toFixed(1)}% exp ${gp(eligible[0].val.exp)} PF ${eligible[0].val.pf.toFixed(2)}\n`);
+  else process.stdout.write(`\nCHOSEN: none met the constraints\n`);
+}
+
+function manageGrid(c: Ctx, v: Variant, slip: number): number | null {
+  const rth = c.rth;
+  const long = c.direction === "LONG";
+  const sign = long ? 1 : -1;
+  const cutoffMin = v.cutoff === "0940" ? 9 * 60 + 35 : LAST_SIGNAL_MIN;
+  let entryIdx = -1;
+  for (let i = 0; i < rth.length - 1; i++) {
+    if (minutesEt(rth[i].timestamp) > cutoffMin) break;
+    if (long ? rth[i].close > c.pmHigh : rth[i].close < c.pmLow) { entryIdx = i + 1; break; }
+  }
+  if (entryIdx < 0) return null;
+  const entry = rth[entryIdx].open * (1 + sign * slip);
+  const stop = v.stop === "0930" ? (long ? rth[0].low : rth[0].high) : (long ? c.pmLow : c.pmHigh);
+  if (long ? stop >= entry : stop <= entry) return null;
+  const exitPx = (p: number): number => p * (1 - sign * slip);
+  const ret = (p: number): number => sign * (exitPx(p) / entry - 1) * 100;
+  const timeLimit = v.exit === "t1030" ? 10 * 60 + 30 : v.exit === "t1200" ? 12 * 60 : TIME_EXIT_MIN;
+  const target = v.exit === "pct1" ? entry * (1 + sign * 0.01) : v.exit === "pct2" ? entry * (1 + sign * 0.02) : null;
+  let remaining = 1, acc = 0, hit1 = false;
+  const t1 = entry + sign * c.atr, t2 = entry + sign * 1.5 * c.atr;
+  for (let i = entryIdx; i < rth.length; i++) {
+    const b = rth[i];
+    const m = minutesEt(b.timestamp);
+    if (long ? b.close < stop : b.close > stop) return acc + remaining * ret(b.close);
+    if (v.exit === "atr") {
+      if (!hit1 && (long ? b.high >= t1 : b.low <= t1)) { acc += 0.5 * ret(t1); remaining -= 0.5; hit1 = true; }
+      if (hit1 && remaining > 0 && (long ? b.high >= t2 : b.low <= t2)) return acc + remaining * ret(t2);
+    } else if (target !== null && (long ? b.high >= target : b.low <= target)) {
+      return ret(target);
+    }
+    if (m >= timeLimit) return acc + remaining * ret(b.close);
+  }
+  return acc + remaining * ret(rth[rth.length - 1].close);
+}
+
+interface GStat { n: number; win: number; exp: number; pf: number }
+function gstat(rs: readonly number[]): GStat {
+  if (rs.length === 0) return { n: 0, win: 0, exp: 0, pf: 0 };
+  const w = rs.filter((r) => r > 0), l = rs.filter((r) => r <= 0);
+  const gw = w.reduce((a, b) => a + b, 0), gl = -l.reduce((a, b) => a + b, 0);
+  return { n: rs.length, win: w.length / rs.length * 100, exp: rs.reduce((a, b) => a + b, 0) / rs.length, pf: gl > 0 ? gw / gl : 99 };
+}
+function variantKey(v: Variant): string { return `gap>=${v.minGap} ${v.structure} ${v.direction} exit=${v.exit} stop=${v.stop} cutoff=${v.cutoff} sector=${v.sector ? "on" : "off"}`; }
+function gp(x: number): string { return `${x >= 0 ? "+" : ""}${x.toFixed(2)}%`; }
 
 main().catch((err) => {
   process.stderr.write(`FATAL: ${err instanceof Error ? err.message : String(err)}\n`);

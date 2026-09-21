@@ -139,3 +139,46 @@ largest gaps (10%+, or the top three of the session) with structure and
 an identifiable catalyst; keep option size small until the forward log
 has 30 instances. Next registration candidate: minimum gap 10% or top 3
 per session, with the exit redesigned for a same-day hold.
+
+## H-GAP-WR: win-rate study, registered 2026-09-21 ~19:50 UTC before running
+
+Objective set by the operator: the highest win rate that still clears
+costs. Same data as above (Yahoo 5-minute bars, 1,500 names), sessions
+2026-07-24 through 2026-09-18; the partial session of 2026-09-21 is
+excluded. Selection window: the first 20 sessions (2026-07-24 through
+2026-08-20). Validation window: the remaining sessions (2026-08-21
+through 2026-09-18), not used for selection. Slippage 10 bps per side
+(double the base test) throughout.
+
+Selection criterion, fixed now: highest selection-window win rate among
+variants with profit factor >= 1.30, expectancy > 0 and at least 60
+trades in the selection window. Report the chosen variant on the
+validation window, the whole grid, the base variant, and a one-lever-
+at-a-time table (each lever changed alone from the base) on both
+windows.
+
+Grid (480 variants):
+- minimum gap: 3%, 5%, 10%
+- structure: beyond the prior 20-session high/low (base); beyond the
+  prior 252-session high/low
+- direction: long only; long and short
+- exit: base (half at +1 ATR, rest at +1.5 ATR, out 15:45); +1% limit
+  target, out 15:45; +2% limit target, out 15:45; time exit at 10:30
+  close, no target; time exit at 12:00 close, no target
+- stop: close through the 09:30 candle's opposite extreme (base); close
+  through the pre-market extreme
+- signal cutoff: confirming candle by 09:40 (the 09:30 or 09:35 candle);
+  by 11:30 (base)
+- sector confirmation: none (base); the candidate's sector ETF closed its
+  09:30 candle above (long) or below (short) its prior close
+
+The open-chase filter (skip if the 09:30 open is more than 1.5% beyond
+the pre-market extreme) applies to every variant. Sector ETF mapping is
+the scanner's static table (src/research/sectors.ts); names without a
+mapping use SPY.
+
+Disclosures: 480 comparisons on roughly 200 selection-window trades is a
+large search on a small sample; the validation window (about 18
+sessions) is the only defense and is itself small. The chosen variant is
+a forward-test hypothesis; the one-lever table is the more trustworthy
+output. No further search after this run.
