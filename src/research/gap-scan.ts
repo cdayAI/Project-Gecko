@@ -208,11 +208,11 @@ async function main(): Promise<void> {
   process.stdout.write(`Source: ${source}\nProvider: ${providerName}\n`);
   process.stdout.write(`Tape: ${tape.join("  ")}\n`);
   process.stdout.write(`Scanned ${names.length}: ${rows.length} gaps >= ${args.minGapPct}%, ${noPrints} without pre-market prints${schwab ? `, ${thin} below ${args.minPmVolume.toLocaleString()} pre-market shares` : ""}, ${failed} failed, ${((Date.now() - startedAt) / 60_000).toFixed(1)} min\n`);
-  printTable(`GAP UP: TRADE CANDIDATES (gap >= ${TRADE_GAP}%, the only bucket positive out of sample)`, ups.filter((r) => r.gapPct >= TRADE_GAP));
-  printTable("GAP UP: WATCH ONLY (5-10%; coin flip in the tests, needs a catalyst and 52w structure)", ups.filter((r) => r.gapPct < TRADE_GAP));
-  printTable(`GAP DOWN: TRADE CANDIDATES (gap <= -${TRADE_GAP}%)`, downs.filter((r) => r.gapPct <= -TRADE_GAP));
-  printTable("GAP DOWN: WATCH ONLY (-5 to -10%)", downs.filter((r) => r.gapPct > -TRADE_GAP));
-  process.stdout.write(`\nEntry rule (H-GAP-GO as registered; see docs/gap-and-go-registration-2026-09-21.md): no pre-market orders. Enter on the first 5-minute candle that CLOSES beyond the pre-market extreme (earliest 09:35). Stop: 5-minute close back through the 09:30 candle's opposite extreme. Targets: 1 ATR (half), 1.5 ATR (rest). Time exit 15:45. Skip if the open is more than 1.5% beyond the pre-market extreme. Trade the 10%+ tier only (about 55-63% win on the stock, PF 1.5-1.8 in both test windows); the tests could not raise that win rate with tighter targets, time exits, wider stops or sector confirmation without losing money out of sample, so do not improvise those.\n`);
+  printTable(`GAP UP: LARGE (gap >= ${TRADE_GAP}%; forward test only, small size)`, ups.filter((r) => r.gapPct >= TRADE_GAP));
+  printTable("GAP UP: WATCH (5-10%; no edge in the tests)", ups.filter((r) => r.gapPct < TRADE_GAP));
+  printTable(`GAP DOWN: LARGE (gap <= -${TRADE_GAP}%; forward test only)`, downs.filter((r) => r.gapPct <= -TRADE_GAP));
+  printTable("GAP DOWN: WATCH (-5 to -10%)", downs.filter((r) => r.gapPct > -TRADE_GAP));
+  process.stdout.write(`\nEntry rule (H-GAP-GO as registered; see docs/gap-and-go-registration-2026-09-21.md): no pre-market orders. Enter on the first 5-minute candle that CLOSES beyond the pre-market extreme (earliest 09:35). Stop: 5-minute close back through the 09:30 candle's opposite extreme. Targets: 1 ATR (half), 1.5 ATR (rest). Time exit 15:45. Skip if the open is more than 1.5% beyond the pre-market extreme. Status after the six-month Schwab-history test (docs/gap-and-go-registration-2026-09-21.md): the rule is NOT a qualified edge. Base rule lost in both halves (PF 0.73 / 0.78); the 10%+ tier was +0.55%/trade (54% win) from late June to September and -0.28% from March to June. Treat every row as a forward-test candidate at small size, never a system; log fills. Tighter targets, time exits, wider stops and sector confirmation all failed out of sample; do not improvise them.\n`);
   process.stdout.write(schwab
     ? `Option marks are live from Schwab. Pay at most 10% over the mid at entry. Max loss is the full premium; the stop lives on the stock.\n\n`
     : `Option marks shown are the chain's last marks (prior close before 09:30). Read the live quote at 09:30 and pay at most 10% over that mid. Max loss is the full premium; the stop lives on the stock.\n\n`);
@@ -369,8 +369,9 @@ async function checkSchwabConnection(rest: SchwabRest): Promise<void> {
 // Descriptive, not a probability for the specific trade.
 function historicalBucket(r: Candidate): string {
   const g = Math.abs(r.gapPct);
-  const base = g >= 10 ? "gap10%+: 63% win, +1.06%/trade (n=74)" : g >= 5 ? "gap5-10%: 49% win, +0.12% (n=144)" : "gap3-5%: 40% win, -0.16% (n=174, lost)";
-  return base + (r.gapPct > 0 && r.above52w ? "; long above 52w high: 65% win (n=34)" : "");
+  // Six-month store test (123 sessions, 10 bps): selection Mar-Jun / validation Jun-Sep.
+  const base = g >= 10 ? "gap10%+: 45% win -0.28% (Mar-Jun) / 54% win +0.55% (Jun-Sep), n=314" : g >= 5 ? "gap5-10%: ~42-46% win, about -0.2% (no edge)" : "gap3-5%: ~38-41% win, -0.3% (lost)";
+  return base + (r.gapPct > 0 && r.above52w ? "; 52w structure: 43%/-0.33% then 50%/+0.28%" : "");
 }
 
 function printTable(title: string, rows: readonly Candidate[]): void {

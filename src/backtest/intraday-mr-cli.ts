@@ -97,7 +97,7 @@ async function main(): Promise<void> {
       if (intraday) stored++;
       else if (args.source === "store") continue;
       else { intraday = await yahoo.fetch({ symbol, interval: "5m", startMs: now - args.lookbackDays * 86_400_000, endMs: now, includePrePost: true }); fetched++; }
-      const daily = await yahoo.fetch({ symbol, interval: "1d", startMs: now - 400 * 86_400_000, endMs: now, includePrePost: false });
+      const daily = await yahoo.fetch({ symbol, interval: "1d", startMs: now - 600 * 86_400_000, endMs: now, includePrePost: false });
       const dailyByDate = daily.map((b) => ({ date: etParts(b.timestamp).date, b }));
       for (const [date, bars] of groupByDate(intraday)) {
         if (date >= today) continue;                         // never the partial current session

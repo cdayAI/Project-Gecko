@@ -234,3 +234,43 @@ Ways to improve that remain, none of them a parameter: more history
 than Yahoo's 60 days; worth checking), pre-market volume as a filter
 (available live on Schwab, not in this test), catalyst quality (the news
 ledger and Jev, not backtestable here), and the forward log.
+
+## Store run: 123 sessions from Schwab 5-minute history (2026-09-21, ~21:00 UTC)
+
+The operator pulled 180 days of Schwab 5-minute bars with extended hours
+for all 1,734 universe names (`npm run history:pull`, 1,748 requests, zero
+failures). The grid was rerun from that store: 2,912 candidate contexts
+over 123 sessions, 2026-03-25 through 2026-09-18, median split at
+2026-06-22, 10 bps per side. Output: docs/results/gap-grid-store.txt and
+docs/results/gap-grid-store.csv.
+
+| Line | Selection (61 sessions) | Validation (62 sessions) |
+|---|---|---|
+| Base rule (gap >= 3%, 20-day structure, both directions) | n=894, 38.4% win, -0.37%, PF 0.73 | n=680, 40.7%, -0.30%, PF 0.78 |
+| gap >= 10% | n=189, 45.5%, -0.28%, PF 0.84 | n=125, 54.4%, +0.55%, PF 1.41 |
+| 52-week structure | n=328, 43.3%, -0.33%, PF 0.78 | n=109, 50.5%, +0.28%, PF 1.24 |
+| +1% target | n=894, 60.6%, -0.31%, PF 0.63 | n=680, 66.6%, -0.24%, PF 0.71 |
+| every other single lever | negative | negative or flat |
+| Eligible variants (PF >= 1.3, exp > 0, n >= 60 on selection) | 1 of 480 | that one: n=28, 67.9%, -0.02%, PF 0.97 |
+
+### Conclusion, superseding the 39-session findings above
+
+Over six months the rule loses on average in both halves. The 10%+
+tier, which was the only slice positive on the 39-session window, is
+revealed as a second-half (late June to September) phenomenon: it lost
+0.28% per trade from March to June. It is NOT QUALIFIED and the scanner
+no longer labels it a trade tier. The catalyst gap-and-go family as
+defined has no demonstrated edge; whatever edge exists in large gaps is
+regime-dependent and the regime is not identified (SPY was above its
+50-day for 102 of the 123 sessions, so that gate does not separate the
+halves; a descriptive regime cut is now printed by the grid for the
+record).
+
+### Defects in this run, fixed after it
+
+Sector confirmation had zero selection-window trades because the sector
+ETFs were not in the store (only Yahoo's last 59 days had ETF bars); the
+puller now includes the sector ETFs and the grid reads them from the
+store. The 52-week structure used fewer than 252 prior sessions for
+March signals (400-day daily lookback); now 600 days. Neither defect
+affects the base-rule or gap-size conclusions.

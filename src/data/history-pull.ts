@@ -21,6 +21,7 @@ import { YahooHistoricalBars } from "./yahoo-historical.js";
 import { loadStoredIntraday, mergeBars, saveStoredIntraday, STORE_DIR } from "./bar-store.js";
 import { loadUniverse } from "../research/universe.js";
 import { parseProvider, schwabSession, type ProviderChoice } from "../research/schwab-session.js";
+import { SECTOR_ETFS } from "../research/sectors.js";
 import type { SchwabRest } from "../brokers/schwab/rest.js";
 import type { Bar } from "../core/types.js";
 
@@ -48,7 +49,8 @@ async function main(): Promise<void> {
   if (args.status) { printStatus(); return; }
   const uni = loadUniverse();
   if (!uni && !args.symbols) throw new Error("No universe file; run npm run universe:build first (or pass --symbols)");
-  const names = args.symbols ?? (args.maxNames > 0 ? uni!.entries.slice(0, args.maxNames) : uni!.entries).map((e) => e.symbol);
+  // Sector ETFs first so regime and sector cuts in the backtests cover the whole store.
+  const names = args.symbols ?? [...SECTOR_ETFS, ...(args.maxNames > 0 ? uni!.entries.slice(0, args.maxNames) : uni!.entries).map((e) => e.symbol)];
   const now = Date.now();
   const startMs = now - args.days * 86_400_000;
   const session = await schwabSession(args.provider);

@@ -107,3 +107,24 @@ frontier so far, validation windows, after costs: about 65 to 71% at
 5 to 15 a day but not profitable at 10 bps; catalyst gaps 55 to 63% at
 1 to 3 a day. Longer intraday history is the next lever; it is a data
 problem before it is a rule problem.
+
+## Store run: 69 sessions from Schwab 5-minute history (2026-09-21, ~21:00 UTC)
+
+Rerun from the operator's Schwab store (docs/results/mr-store.txt,
+mr-store.jsonl). Only 69 sessions (2026-06-11 through 2026-09-18) were
+usable because the pilot's 400-day daily lookback did not supply 205
+prior sessions for earlier dates; fixed to 600 days after this run.
+101,535 name-sessions, 10 bps per side, median split at 2026-07-30.
+
+| Variant | Signals/day | All: win / exp / PF | Validation: win / exp / PF |
+|---|---:|---|---|
+| FILL half-fill, stop 09:30 low, out 12:00 | 38.4 | 56.7% / -0.17% / 0.60 | 57.2% / -0.11% / 0.69 |
+| FILL full-fill, stop 09:30 low, out 12:00 | 61.2 | 51.7% / -0.14% / 0.75 | 53.0% / -0.06% / 0.86 |
+| FILL half-fill, stop open - 0.5 ATR, out 12:00 | 39.4 | 65.2% / -0.14% / 0.68 | 66.5% / -0.04% / 0.88 |
+| DIP (all three variants) | 60-64 | 37-39% / -0.25 to -0.29% / 0.49-0.53 | same |
+
+Ten-slot books: best validation PF 1.06-1.07 (full-fill and open - 0.5
+ATR variants), expectancy about zero. Same shape as the 40-session
+pilot: high win rates for H-FILL, losers about twice the size of
+winners, negative or zero expectancy at 10 bps. Both hypotheses fail
+their gates again. Dropped at these definitions.

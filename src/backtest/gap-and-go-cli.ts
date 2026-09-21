@@ -116,7 +116,7 @@ async function main(): Promise<void> {
     try {
       const intraday = await loadIntraday(yahoo, symbol, now, args);
       if (!intraday) continue;
-      const daily = await yahoo.fetch({ symbol, interval: "1d", startMs: now - 400 * 86_400_000, endMs: now, includePrePost: false });
+      const daily = await yahoo.fetch({ symbol, interval: "1d", startMs: now - 600 * 86_400_000, endMs: now, includePrePost: false });
       const byDate = groupByDate(intraday);
       const dailyByDate = daily.map((b) => ({ date: etParts(b.timestamp).date, b }));
       const todayDate = etParts(now).date;
@@ -281,6 +281,7 @@ interface Ctx {
   readonly pmLow: number;
   readonly atr: number;
   readonly sectorAgrees: boolean;
+  readonly spyAbove50: boolean;
 }
 
 type ExitRule = "atr" | "pct1" | "pct2" | "t1030" | "t1200";
@@ -295,7 +296,7 @@ async function runGrid(names: readonly string[], yahoo: YahooHistoricalBars, now
   // Sector ETF 09:30-candle direction per date: close of the first RTH bar vs prior session close.
   const etfGreen = new Map<string, Map<string, boolean>>();
   for (const etf of SECTOR_ETFS) {
-    const bars = await yahoo.fetch({ symbol: etf, interval: "5m", startMs: now - args.lookbackDays * 86_400_000, endMs: now, includePrePost: true });
+    const bars = (await loadIntraday(yahoo, etf, now, args)) ?? [];
     const byDate = groupByDate(bars);
     const dates = [...byDate.keys()].sort();
     const m = new Map<string, boolean>();
@@ -308,6 +309,15 @@ async function runGrid(names: readonly string[], yahoo: YahooHistoricalBars, now
     etfGreen.set(etf, m);
   }
 
+  // SPY above its 50-session average on the prior session (descriptive regime cut).
+  const spyDaily = await yahoo.fetch({ symbol: "SPY", interval: "1d", startMs: now - 600 * 86_400_000, endMs: now, includePrePost: false });
+  const spyAbove = new Map<string, boolean>();
+  for (let i = 50; i < spyDaily.length; i++) {
+    const sma = spyDaily.slice(i - 49, i + 1).reduce((s, b) => s + b.close, 0) / 50;
+    spyAbove.set(etParts(spyDaily[i].timestamp).date, spyDaily[i].close > sma);
+  }
+  const regimeOnDate = (date: string): boolean => { const prior = [...spyAbove.keys()].filter((d) => d < date).sort(); return prior.length ? spyAbove.get(prior[prior.length - 1]) ?? false : false; };
+
   // One context per (symbol, session) meeting the loosest screen (3%, beyond 20-day).
   const ctxs: Ctx[] = [];
   let failed = 0;
@@ -316,7 +326,7 @@ async function runGrid(names: readonly string[], yahoo: YahooHistoricalBars, now
     try {
       const intraday = await loadIntraday(yahoo, symbol, now, args);
       if (!intraday) continue;
-      const daily = await yahoo.fetch({ symbol, interval: "1d", startMs: now - 400 * 86_400_000, endMs: now, includePrePost: false });
+      const daily = await yahoo.fetch({ symbol, interval: "1d", startMs: now - 600 * 86_400_000, endMs: now, includePrePost: false });
       const byDate = groupByDate(intraday);
       const dailyByDate = daily.map((b) => ({ date: etParts(b.timestamp).date, b }));
       const todayDate = etParts(now).date;
@@ -342,7 +352,7 @@ async function runGrid(names: readonly string[], yahoo: YahooHistoricalBars, now
         if (direction === "SHORT" && open < pmLow * (1 - OPEN_CHASE_PCT / 100)) continue;
         const green = etfGreen.get(sectorFor(symbol))?.get(date);
         const sectorAgrees = green === undefined ? false : direction === "LONG" ? green : !green;
-        ctxs.push({ symbol, date, direction, gapPct, beyond20, beyond252, rth, pmHigh, pmLow, atr: averageTrueRange(prior, 14), sectorAgrees });
+        ctxs.push({ symbol, date, direction, gapPct, beyond20, beyond252, rth, pmHigh, pmLow, atr: averageTrueRange(prior, 14), sectorAgrees, spyAbove50: regimeOnDate(date) });
       }
     } catch { failed++; }
     if ((i + 1) % 300 === 0) process.stdout.write(`  contexts: ${i + 1}/${names.length} names, ${ctxs.length} candidates, ${((Date.now() - startedAt) / 60_000).toFixed(1)} min\n`);
@@ -383,6 +393,25 @@ async function runGrid(names: readonly string[], yahoo: YahooHistoricalBars, now
   process.stdout.write(`\nOne lever at a time (from base):\n`);
   const levers: Partial<Variant>[] = [{ minGap: 5 }, { minGap: 10 }, { structure: "252d" }, { direction: "long" }, { exit: "pct1" }, { exit: "pct2" }, { exit: "t1030" }, { exit: "t1200" }, { stop: "pm" }, { cutoff: "0940" }, { sector: true }];
   for (const l of levers) process.stdout.write(`  ${line(evaluate({ ...base, ...l }))}\n`);
+
+  // Descriptive regime cut on two fixed variants (not a selection lever).
+  const regimeLine = (label: string, v: Variant, above: boolean): string => {
+    const rets: { date: string; r: number }[] = [];
+    for (const c of ctxs) {
+      if (c.spyAbove50 !== above) continue;
+      if (Math.abs(c.gapPct) < v.minGap) continue;
+      if (v.structure === "252d" && !c.beyond252) continue;
+      if (v.direction === "long" && c.direction === "SHORT") continue;
+      const r = manageGrid(c, v, slip);
+      if (r !== null) rets.push({ date: c.date, r });
+    }
+    const a = gstat(rets.map((x) => x.r)), se = gstat(rets.filter((x) => x.date <= SELECTION_END).map((x) => x.r)), va = gstat(rets.filter((x) => x.date > SELECTION_END).map((x) => x.r));
+    return `  ${label.padEnd(44)} ALL n=${String(a.n).padStart(4)} win ${a.win.toFixed(1)}% exp ${gp(a.exp)} PF ${a.pf.toFixed(2)} | SEL n=${se.n} win ${se.win.toFixed(1)}% PF ${se.pf.toFixed(2)} | VAL n=${va.n} win ${va.win.toFixed(1)}% PF ${va.pf.toFixed(2)}`;
+  };
+  process.stdout.write(`\nRegime cut (SPY vs 50-day on the prior session; descriptive):\n`);
+  for (const [label, v] of [["base, SPY above 50d", base], ["base, SPY below 50d", base], ["gap>=10 both, SPY above 50d", { ...base, minGap: 10 }], ["gap>=10 both, SPY below 50d", { ...base, minGap: 10 }], ["gap>=10 long, SPY above 50d", { ...base, minGap: 10, direction: "long" as const }], ["gap>=10 long, SPY below 50d", { ...base, minGap: 10, direction: "long" as const }]] as const) {
+    process.stdout.write(regimeLine(label, v, label.includes("above")) + "\n");
+  }
 
   const eligible = results.filter((r) => r.sel.n >= 60 && r.sel.pf >= 1.3 && r.sel.exp > 0).sort((a, b) => b.sel.win - a.sel.win);
   process.stdout.write(`\nTop 12 eligible by selection win rate (${eligible.length} of ${results.length} variants eligible):\n`);
