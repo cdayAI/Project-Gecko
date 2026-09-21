@@ -147,3 +147,84 @@ version is untested: an average edge of a few tenths of a percent per
 trade over three sessions is a stock result; at-the-money calls on
 breadth days with 2.5+ ATR drops are the only slice where an option
 plausibly clears its spread, and that is a hypothesis.
+
+## H-BOUNCE-WR: win-rate study, registered 2026-09-21 ~19:05 UTC before running
+
+Objective set by the operator: the highest win rate that still clears
+costs. Selection criterion, fixed now: among the variants below, choose
+the highest win rate on the SELECTION window (entries 2024-07-12 through
+2025-08-31) subject to profit factor >= 1.20 and expectancy > 0 on that
+window at 20 bps per side, and at least 150 trades in the window. Report
+the chosen variant on the VALIDATION window (entries 2025-09-01 through
+2026-09-21), which is not used for selection. Report the whole grid.
+
+Grid (all combinations; 108 variants):
+- breadth gate: none, >= 30, >= 75 qualifying names that day
+- minimum three-day drop: 1.5 ATR, 2.5 ATR
+- SPY regime: any, or SPY below its 50-day on the signal day
+- exit rule: close above the 5-day average (base); first close above the
+  prior day's close ("first up close"); close at least 1% above entry
+- stop: close 2 ATR below entry (base); 3 ATR; no price stop (time only)
+- time limit: 5 sessions (fixed)
+
+Everything else as H-BOUNCE. The grid is a declared search; the chosen
+variant's selection-window numbers are optimistic by construction and
+the validation-window numbers are the ones to believe. Whatever is
+chosen is a forward-test hypothesis (H-BOUNCE-WR), not a live approval.
+
+## H-BOUNCE-WR results (2026-09-21, ~19:30 UTC)
+
+All 108 variants at 20 bps per side are in docs/bounce-grid-20bps-2026-09-21.csv
+(selection, validation and full-window statistics per variant). Under the
+declared criterion the chosen variant is:
+
+breadth >= 75 qualifying names that day, three-day drop >= 2.5 ATR, SPY
+below its 50-day, exit on the first close at or above entry +1%, stop on
+a close 2 ATR below entry, five-session limit.
+
+| Window (20 bps/side) | n | Win | Expectancy | PF |
+|---|---:|---:|---:|---:|
+| Selection (entries <= 2025-08-31, used to choose) | 671 | 82.1% | +1.23% | 2.75 |
+| Validation (entries > 2025-08-31, not used to choose) | 265 | 74.7% | +1.43% | 2.64 |
+| Base H-BOUNCE on the same split, for reference | 7,835 / 9,482 | 58.5% / 57.8% | -0.04% / +0.14% | 0.97 / 1.09 |
+
+The stop setting barely matters (2 ATR, 3 ATR and none are within a few
+hundredths); 2 ATR is kept because a rule with no price stop is not one
+to trade. The exit at +1% is what raises the win rate; the base "close
+above the 5-day" exit at the same filters wins 76.6% / 62.6% with a
+larger average win.
+
+Capped books built from the chosen variant's 936 signals, ranked by drop
+size, new entries only while a slot is free:
+
+| Book | n | Win | Expectancy | PF | Net at $1k per slot |
+|---|---:|---:|---:|---:|---:|
+| 5 slots, whole window | 95 | 75.8% | +1.15% | 2.61 | +$1,095 |
+| 5 slots, selection | 50 | 84.0% | +1.39% | 4.25 | +$695 |
+| 5 slots, validation | 45 | 66.7% | +0.89% | 1.86 | +$399 |
+| 3 slots, whole window | 59 | 76.3% | +1.11% | 2.83 | +$655 |
+| 10 slots, whole window | 174 | 77.0% | +1.18% | 2.51 | +$2,050 |
+
+5-slot book: maximum drawdown $148 on at most $5,000 deployed; exit mix
+target 72%, time 26%, stop 2%; average hold 2.8 sessions; worst trade
+ACMR 2025-03-31 -14.8%; 88 symbols, best symbol 7% of net.
+
+Frequency: 24 entry days in 26 months (median 30 signals on an active
+day), clustered in corrections: Aug 2024, Dec 2024 to Apr 2025, Nov to
+Dec 2025, six days in March 2026, July and September 2026. Months can pass
+with nothing to do. That is the nature of the edge: it is paid for
+providing liquidity into market-wide selling, and only then.
+
+### Status
+
+H-BOUNCE-WR is the forward-test hypothesis and the default mode of
+`npm run scan:swing`, which prints the breadth count, the SPY regime and
+a TRADE / STAND ASIDE verdict requiring both conditions, candidates with
+drops of 2.5 ATR or more ranked by drop, the +1% target and 2 ATR stop
+references, and a deep in-the-money call (about 8% ITM, stock-like)
+14 to 35 days out. It is not a live approval: the grid selection makes
+the selection-window figures optimistic (the validation figures are the
+honest ones), survivorship in the universe flatters dip buying by an
+unknown amount, and no intraday stop is modeled. The forward log decides.
+Instrument: stock, or a deep ITM call as a stock substitute. An
+at-the-money option does not pay for a +1% target.

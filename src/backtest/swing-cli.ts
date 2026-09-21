@@ -20,16 +20,18 @@ import type { Bar } from "../core/types.js";
 
 const log = createLogger("swing");
 
-interface Args { maxNames: number; slippageBps: number; out: string; lookbackDays: number }
+interface Args { maxNames: number; slippageBps: number; out: string; lookbackDays: number; grid: boolean; gridOut: string }
 
 function parseArgs(argv: readonly string[]): Args {
-  const out: Args = { maxNames: 0, slippageBps: 10, out: "", lookbackDays: 1100 };
+  const out: Args = { maxNames: 0, slippageBps: 10, out: "", lookbackDays: 1100, grid: false, gridOut: "" };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--max-names") out.maxNames = Number(argv[++i]);
     else if (a === "--slippage-bps") out.slippageBps = Number(argv[++i]);
     else if (a === "--out") out.out = argv[++i] ?? "";
     else if (a === "--lookback") out.lookbackDays = Number(argv[++i]);
+    else if (a === "--grid") out.grid = true;
+    else if (a === "--grid-out") out.gridOut = argv[++i] ?? "";
   }
   return out;
 }
@@ -109,6 +111,8 @@ async function main(): Promise<void> {
   for (const s of series) s.dates.forEach((d, i) => { if (Number.isFinite(s.ret60[i]) && s.dollarVol20[i] >= MIN_DOLLAR_VOL) retByDate.set(d, [...(retByDate.get(d) ?? []), s.ret60[i]]); });
   const p80 = new Map<string, number>();
   for (const [d, arr] of retByDate) { const sorted = [...arr].sort((a, b) => a - b); p80.set(d, sorted[Math.floor(sorted.length * 0.8)] ?? Infinity); }
+
+  if (args.grid) { runGrid(series, spyRegime, slip, args.gridOut); return; }
 
   const trades: SwingTrade[] = [];
   for (const s of series) {
@@ -217,5 +221,113 @@ function concentration(label: string, ts: readonly SwingTrade[]): void {
   const best = [...m.entries()].sort((a, b) => b[1] - a[1])[0];
   if (best) process.stdout.write(`${label} best symbol ${best[0]} $${best[1].toFixed(0)} = ${net !== 0 ? (best[1] / net * 100).toFixed(0) : "n/a"}% of net; symbols traded ${m.size}\n`);
 }
+
+// ----- H-BOUNCE-WR grid: declared search over gate, drop, regime, exit, stop -----
+
+interface BounceSignal { readonly s: Series; readonly t: number; readonly regimeOk: boolean; readonly drop: number }
+
+const SELECTION_END = "2025-08-31";   // entries on or before this date select; later entries validate
+
+function runGrid(series: readonly Series[], spyRegime: Map<string, boolean>, slip: number, gridOut: string): void {
+  // Collect every base signal (drop >= 1.5 ATR) once; variants filter and manage differently.
+  const signals: BounceSignal[] = [];
+  const breadthByDate = new Map<string, number>();
+  for (const s of series) {
+    const n = s.dates.length;
+    for (let t = 205; t < n - 1; t++) {
+      if (!(s.dollarVol20[t] >= MIN_DOLLAR_VOL)) continue;
+      if (s.close[t] > s.sma200[t] && s.close[t] < s.close[t - 1] && s.close[t - 1] < s.close[t - 2] && s.close[t - 2] < s.close[t - 3] && s.close[t - 3] - s.close[t] >= 1.5 * s.atr14[t]) {
+        const drop = (s.close[t - 3] - s.close[t]) / s.atr14[t];
+        signals.push({ s, t, regimeOk: spyRegime.get(s.dates[t]) ?? false, drop });
+        breadthByDate.set(s.dates[t], (breadthByDate.get(s.dates[t]) ?? 0) + 1);
+      }
+    }
+  }
+  const exits = ["sma5", "upclose", "pct1"] as const;
+  const stops = [2, 3, 0] as const;
+  const rows: string[] = ["breadth,minDrop,spy,exit,stop,selN,selWin,selExp,selPF,valN,valWin,valExp,valPF,allN,allWin,allExp,allPF"];
+  interface Res { key: string; sel: Stat; val: Stat; all: Stat; breadth: number; minDrop: number; spy: "any" | "below"; exit: "sma5" | "upclose" | "pct1"; stop: number }
+  const results: Res[] = [];
+  for (const breadth of [0, 30, 75]) for (const minDrop of [1.5, 2.5]) for (const spy of ["any", "below"] as const) for (const exit of exits) for (const stop of stops) {
+    const rets: { date: string; r: number }[] = [];
+    for (const sig of signals) {
+      if (sig.drop < minDrop) continue;
+      if ((breadthByDate.get(sig.s.dates[sig.t]) ?? 0) < breadth) continue;
+      if (spy === "below" && sig.regimeOk) continue;
+      const r = manageVariant(sig.s, sig.t, exit, stop, slip);
+      if (r !== null) rets.push(r);
+    }
+    const sel = stat(rets.filter((x) => x.date <= SELECTION_END).map((x) => x.r));
+    const val = stat(rets.filter((x) => x.date > SELECTION_END).map((x) => x.r));
+    const all = stat(rets.map((x) => x.r));
+    const key = `breadth>=${breadth} drop>=${minDrop} spy=${spy} exit=${exit} stop=${stop === 0 ? "none" : stop + "ATR"}`;
+    results.push({ key, sel, val, all, breadth, minDrop, spy, exit, stop });
+    rows.push([breadth, minDrop, spy, exit, stop, sel.n, sel.win.toFixed(1), sel.exp.toFixed(2), sel.pf.toFixed(2), val.n, val.win.toFixed(1), val.exp.toFixed(2), val.pf.toFixed(2), all.n, all.win.toFixed(1), all.exp.toFixed(2), all.pf.toFixed(2)].join(","));
+  }
+  if (gridOut) { fs.mkdirSync(path.dirname(gridOut), { recursive: true }); fs.writeFileSync(gridOut, rows.join("\n") + "\n"); }
+  const eligible = results.filter((r) => r.sel.n >= 150 && r.sel.pf >= 1.2 && r.sel.exp > 0).sort((a, b) => b.sel.win - a.sel.win);
+  process.stdout.write(`\n===== H-BOUNCE-WR grid: ${results.length} variants, slippage ${(slip * 10_000).toFixed(0)} bps/side =====\n`);
+  process.stdout.write(`Selection window entries <= ${SELECTION_END}; validation after. Criterion: highest selection win rate with PF >= 1.20, expectancy > 0, n >= 150.\n`);
+  const line = (r: Res): string => `${r.key.padEnd(58)} SEL n=${String(r.sel.n).padStart(5)} win ${r.sel.win.toFixed(1)}% exp ${fmtPct(r.sel.exp)} PF ${r.sel.pf.toFixed(2)} | VAL n=${String(r.val.n).padStart(5)} win ${r.val.win.toFixed(1)}% exp ${fmtPct(r.val.exp)} PF ${r.val.pf.toFixed(2)}`;
+  process.stdout.write(`\nTop 12 eligible by selection win rate:\n`);
+  for (const r of eligible.slice(0, 12)) process.stdout.write(`  ${line(r)}\n`);
+  process.stdout.write(`\nBase variant for reference:\n  ${line(results.find((r) => r.key === "breadth>=0 drop>=1.5 spy=any exit=sma5 stop=2ATR")!)}\n`);
+  process.stdout.write(`\nHighest win rate regardless of constraints (for the record):\n`);
+  for (const r of [...results].sort((a, b) => b.sel.win - a.sel.win).slice(0, 5)) process.stdout.write(`  ${line(r)}\n`);
+  if (eligible[0]) {
+    const c = eligible[0];
+    process.stdout.write(`\nCHOSEN: ${c.key}\n  validation: n=${c.val.n} win ${c.val.win.toFixed(1)}% exp ${fmtPct(c.val.exp)} PF ${c.val.pf.toFixed(2)}\n`);
+    if (gridOut) {
+      // Full trade records for the chosen variant so the capped book can be studied.
+      const recs: string[] = [];
+      for (const sig of signals) {
+        if (sig.drop < c.minDrop) continue;
+        const b = breadthByDate.get(sig.s.dates[sig.t]) ?? 0;
+        if (b < c.breadth) continue;
+        if (c.spy === "below" && sig.regimeOk) continue;
+        const r = manageVariantFull(sig.s, sig.t, c.exit, c.stop, slip);
+        if (r) recs.push(JSON.stringify({ symbol: sig.s.symbol, breadth: b, drop: sig.drop, ...r }));
+      }
+      const out = gridOut.replace(/\.csv$/, "") + ".chosen.jsonl";
+      fs.writeFileSync(out, recs.join("\n") + "\n");
+      process.stdout.write(`  chosen-variant trades written: ${out} (${recs.length})\n`);
+    }
+  } else process.stdout.write(`\nCHOSEN: none met the constraints\n`);
+}
+
+function manageVariant(s: Series, t: number, exit: "sma5" | "upclose" | "pct1", stopAtr: number, slip: number): { date: string; r: number } | null {
+  const e = t + 1; const n = s.dates.length;
+  if (e >= n) return null;
+  const entry = s.open[e] * (1 + slip); const atr = s.atr14[t];
+  if (!(entry > 0) || !(atr > 0)) return null;
+  for (let d = e; d < n; d++) {
+    const target = exit === "sma5" ? s.close[d] > s.sma5[d] : exit === "upclose" ? s.close[d] > s.close[d - 1] : s.close[d] >= entry * 1.01;
+    const stopped = stopAtr > 0 && s.close[d] < entry - stopAtr * atr;
+    if (target || stopped || d - e >= 4) return { date: s.dates[e], r: (s.close[d] * (1 - slip) / entry - 1) * 100 };
+  }
+  return { date: s.dates[e], r: (s.close[n - 1] * (1 - slip) / entry - 1) * 100 };
+}
+
+function manageVariantFull(s: Series, t: number, exit: "sma5" | "upclose" | "pct1", stopAtr: number, slip: number): { signalDate: string; entryDate: string; exitDate: string; entry: number; exit: number; reason: string; held: number; returnPct: number } | null {
+  const e = t + 1; const n = s.dates.length;
+  if (e >= n) return null;
+  const entry = s.open[e] * (1 + slip); const atr = s.atr14[t];
+  if (!(entry > 0) || !(atr > 0)) return null;
+  for (let d = e; d < n; d++) {
+    const target = exit === "sma5" ? s.close[d] > s.sma5[d] : exit === "upclose" ? s.close[d] > s.close[d - 1] : s.close[d] >= entry * 1.01;
+    const stopped = stopAtr > 0 && s.close[d] < entry - stopAtr * atr;
+    if (target || stopped || d - e >= 4) return { signalDate: s.dates[t], entryDate: s.dates[e], exitDate: s.dates[d], entry, exit: s.close[d] * (1 - slip), reason: target ? "target" : stopped ? "stop" : "time", held: d - e + 1, returnPct: (s.close[d] * (1 - slip) / entry - 1) * 100 };
+  }
+  return null;
+}
+
+interface Stat { n: number; win: number; exp: number; pf: number }
+function stat(rs: readonly number[]): Stat {
+  if (rs.length === 0) return { n: 0, win: 0, exp: 0, pf: 0 };
+  const w = rs.filter((r) => r > 0), l = rs.filter((r) => r <= 0);
+  const gw = w.reduce((a, b) => a + b, 0), gl = -l.reduce((a, b) => a + b, 0);
+  return { n: rs.length, win: w.length / rs.length * 100, exp: rs.reduce((a, b) => a + b, 0) / rs.length, pf: gl > 0 ? gw / gl : 99 };
+}
+function fmtPct(x: number): string { return `${x >= 0 ? "+" : ""}${x.toFixed(2)}%`; }
 
 main().catch((err) => { process.stderr.write(`FATAL: ${err instanceof Error ? err.message : String(err)}\n`); process.exit(1); });

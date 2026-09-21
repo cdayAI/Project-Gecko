@@ -49,7 +49,7 @@ export async function pickSchwabContract(rest: SchwabRest, symbol: string, price
     let fallback: StrikePick | null = null;
     for (const arr of Object.values(map[expKey])) {
       for (const c of arr) {
-        const otm = right === "C" ? c.strikePrice >= price : c.strikePrice <= price;
+        const otm = otmPct < 0 ? true : right === "C" ? c.strikePrice >= price : c.strikePrice <= price;
         if (otm && (!best || Math.abs(c.strikePrice - target) < Math.abs(best.strike - target))) best = { strike: c.strikePrice, c };
         if (!fallback || Math.abs(c.strikePrice - target) < Math.abs(fallback.strike - target)) fallback = { strike: c.strikePrice, c };
       }
@@ -95,7 +95,8 @@ export async function pickCboeContract(symbol: string, price: number, right: "C"
     const expiry = fridays[0] ?? expiries[0];
     const target = right === "C" ? price * (1 + otmPct / 100) : price * (1 - otmPct / 100);
     const atExpiry = parsed.filter((x) => x.expiry === expiry);
-    const otm = atExpiry.filter((x) => (right === "C" ? x.strike >= price : x.strike <= price));
+    // Negative otmPct asks for an in-the-money strike (stock-like deep ITM); otherwise never pick ITM when an OTM strike is listed.
+    const otm = otmPct < 0 ? atExpiry : atExpiry.filter((x) => (right === "C" ? x.strike >= price : x.strike <= price));
     const best = (otm.length > 0 ? otm : atExpiry).sort((a, b) => Math.abs(a.strike - target) - Math.abs(b.strike - target))[0];
     return {
       code: best.o.option,
