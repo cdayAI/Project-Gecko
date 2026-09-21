@@ -10,7 +10,10 @@
 // and data/oauth-tokens.json loads (npm run auth), otherwise Yahoo. Schwab
 // batches 100 quotes per request (real-time, with pre-market volume), pulls
 // pre-market high/low from extended-hours minute bars for finalists, and
-// names the contract from the live chain with Greeks. Yahoo is one 5-minute
+// names the contract from the live chain with Greeks. Strike distance is 0.6
+// ATR out of the money, capped at 2.5% of price, so low-volatility names do
+// not get near-worthless strikes; expiries prefer the first standard Friday
+// between 7 and 21 days out. Yahoo is one 5-minute
 // request per name with no pre-market volume; contracts come from Cboe's
 // delayed chain.
 //
@@ -192,7 +195,8 @@ async function main(): Promise<void> {
       }
       if (args.chains) {
         const right = list === ups ? "C" : "P";
-        list[i].contract = schwab ? await schwabContract(schwab, r.symbol, r.premarketLast, right, now) : await pickContract(r.symbol, r.premarketLast, right, now);
+        const otmPct = Math.min(2.5, 0.6 * (r.stats.atr14 / r.premarketLast) * 100);
+        list[i].contract = schwab ? await schwabContract(schwab, r.symbol, r.premarketLast, right, otmPct, now) : await pickContract(r.symbol, r.premarketLast, right, otmPct, now);
       }
     }
   }
@@ -302,7 +306,7 @@ async function schwabPremarketRange(rest: SchwabRest, symbol: string, today: str
 }
 
 // Live chain: nearest expiration at least 7 days out, strike nearest 2.5% OTM.
-async function schwabContract(rest: SchwabRest, symbol: string, price: number, right: "C" | "P", now: number): Promise<ContractPick | null> {
+async function schwabContract(rest: SchwabRest, symbol: string, price: number, right: "C" | "P", otmPct: number, now: number): Promise<ContractPick | null> {
   try {
     const chain = await rest.getOptionChain({
       symbol,
@@ -316,9 +320,11 @@ async function schwabContract(rest: SchwabRest, symbol: string, price: number, r
     const map = right === "C" ? chain.callExpDateMap : chain.putExpDateMap;
     const expKeys = Object.keys(map).sort();
     if (expKeys.length === 0) return null;
-    const target = right === "C" ? price * 1.025 : price * 0.975;
+    const fridays = expKeys.filter((k) => isFriday(k.slice(0, 10)));
+    const expKey = fridays[0] ?? expKeys[0];
+    const target = right === "C" ? price * (1 + otmPct / 100) : price * (1 - otmPct / 100);
     let best: { strike: number; c: { symbol: string; bid: number; ask: number; delta: number; openInterest: number } } | null = null;
-    for (const arr of Object.values(map[expKeys[0]])) {
+    for (const arr of Object.values(map[expKey])) {
       for (const c of arr) {
         if (!best || Math.abs(c.strikePrice - target) < Math.abs(best.strike - target)) best = { strike: c.strikePrice, c };
       }
@@ -326,7 +332,7 @@ async function schwabContract(rest: SchwabRest, symbol: string, price: number, r
     if (!best) return null;
     return {
       code: best.c.symbol.replace(/\s+/g, ""),
-      expiry: expKeys[0].slice(0, 10),
+      expiry: expKey.slice(0, 10),
       strike: best.strike,
       right,
       bid: best.c.bid,
@@ -344,7 +350,7 @@ interface CboeOption { option: string; bid: number; ask: number; delta?: number;
 
 // Name the listed contract from Cboe's delayed chain. null when the symbol
 // has no chain (not optionable) or the fetch fails.
-async function pickContract(symbol: string, price: number, right: "C" | "P", now: number): Promise<ContractPick | null> {
+async function pickContract(symbol: string, price: number, right: "C" | "P", otmPct: number, now: number): Promise<ContractPick | null> {
   try {
     const resp = await fetch(`${CBOE_CHAIN}/${symbol}.json`, { headers: { "User-Agent": USER_AGENT } });
     if (!resp.ok) return null;
@@ -352,13 +358,16 @@ async function pickContract(symbol: string, price: number, right: "C" | "P", now
     const options = json.data?.options ?? [];
     if (options.length === 0) return null;
     const minExpiry = etParts(now + 7 * 86_400_000).date.replace(/-/g, "").slice(2);   // YYMMDD
+    const maxExpiry = etParts(now + 21 * 86_400_000).date.replace(/-/g, "").slice(2);
     const parsed = options.map((o) => {
       const m = o.option.match(/^([A-Z]+)(\d{6})([CP])(\d{8})$/);
       return m ? { o, expiry: m[2], right: m[3] as "C" | "P", strike: Number(m[4]) / 1000 } : null;
     }).filter((x): x is NonNullable<typeof x> => x !== null && x.right === right && x.expiry >= minExpiry);
     if (parsed.length === 0) return null;
-    const expiry = [...new Set(parsed.map((x) => x.expiry))].sort()[0];
-    const target = right === "C" ? price * 1.025 : price * 0.975;
+    const expiries = [...new Set(parsed.map((x) => x.expiry))].sort();
+    const fridays = expiries.filter((e) => e <= maxExpiry && isFriday(`20${e.slice(0, 2)}-${e.slice(2, 4)}-${e.slice(4, 6)}`));
+    const expiry = fridays[0] ?? expiries[0];
+    const target = right === "C" ? price * (1 + otmPct / 100) : price * (1 - otmPct / 100);
     const best = parsed.filter((x) => x.expiry === expiry).sort((a, b) => Math.abs(a.strike - target) - Math.abs(b.strike - target))[0];
     return {
       code: best.o.option,
@@ -373,6 +382,10 @@ async function pickContract(symbol: string, price: number, right: "C" | "P", now
   } catch {
     return null;
   }
+}
+
+function isFriday(isoDate: string): boolean {
+  return new Date(`${isoDate}T12:00:00Z`).getUTCDay() === 5;
 }
 
 function printTable(title: string, rows: readonly Candidate[]): void {
