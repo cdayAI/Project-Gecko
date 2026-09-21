@@ -4,6 +4,15 @@
 //   npm run scan:gap -- --max-names 800       # top names by dollar volume
 //   npm run scan:gap -- --min-gap 3 --top 15
 //   npm run scan:gap -- --symbols AMD,HOOD    # explicit list, stats fetched live
+//   npm run scan:gap -- --provider schwab     # Schwab Trader API (thinkorswim data)
+//
+// Providers: "auto" (default) uses Schwab when SCHWAB_CLIENT_ID/SECRET are set
+// and data/oauth-tokens.json loads (npm run auth), otherwise Yahoo. Schwab
+// batches 100 quotes per request (real-time, with pre-market volume), pulls
+// pre-market high/low from extended-hours minute bars for finalists, and
+// names the contract from the live chain with Greeks. Yahoo is one 5-minute
+// request per name with no pre-market volume; contracts come from Cboe's
+// delayed chain.
 //
 // Run between 08:00 and 09:25 ET. Universe mode reads data/universe/universe.json
 // (build it with `npm run universe:build`), pulls one 5-minute request per
@@ -16,7 +25,10 @@
 //
 // Read-only. Never places orders. Yahoo pre-market bars carry no volume.
 
+import "dotenv/config";
 import { createLogger, setLogLevel } from "../core/logger.js";
+import { SchwabAuth } from "../brokers/schwab/auth.js";
+import { SchwabRest } from "../brokers/schwab/rest.js";
 import { etParts } from "../utils/time.js";
 import { YahooHistoricalBars } from "../data/yahoo-historical.js";
 import { loadUniverse, statsFromDaily, type UniverseEntry } from "./universe.js";
@@ -41,10 +53,12 @@ interface Args {
   top: number;
   maxNames: number;
   chains: boolean;
+  provider: "auto" | "yahoo" | "schwab";
+  minPmVolume: number;                 // Schwab only: pre-market shares traded
 }
 
 function parseArgs(argv: readonly string[]): Args {
-  const out: Args = { symbols: null, minGapPct: 2.5, top: 12, maxNames: 1500, chains: true };
+  const out: Args = { symbols: null, minGapPct: 2.5, top: 12, maxNames: 1500, chains: true, provider: "auto", minPmVolume: 25_000 };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--symbols") out.symbols = (argv[++i] ?? "").split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
@@ -52,6 +66,8 @@ function parseArgs(argv: readonly string[]): Args {
     else if (a === "--top") out.top = Number(argv[++i]);
     else if (a === "--max-names") out.maxNames = Number(argv[++i]);
     else if (a === "--no-chains") out.chains = false;
+    else if (a === "--provider") { const v = (argv[++i] ?? "").toLowerCase(); if (v === "yahoo" || v === "schwab" || v === "auto") out.provider = v; }
+    else if (a === "--min-pm-volume") out.minPmVolume = Number(argv[++i]);
   }
   return out;
 }
@@ -71,6 +87,7 @@ interface Candidate {
   readonly premarketLow: number;
   readonly priorClose: number;
   readonly gapPct: number;
+  readonly pmVolume: number | null;    // Schwab only
   readonly stats: Stats;
   readonly aboveHigh20: boolean;
   readonly above52w: boolean;
@@ -115,22 +132,33 @@ async function main(): Promise<void> {
     }
   }
 
-  // Sector tape first.
-  const tape: string[] = [];
-  for (const etf of TAPE) {
-    const g = await gapFor(yahoo, etf, today, now);
-    if (g) tape.push(`${etf} ${g.gapPct >= 0 ? "+" : ""}${g.gapPct.toFixed(2)}%`);
-  }
+  // Data source.
+  const schwab = await schwabRestIfAvailable(args.provider);
+  const providerName = schwab ? "schwab (real-time, batch quotes)" : "yahoo (5m bars, no pre-market volume)";
 
+  const startedAt = Date.now();
   const rows: Candidate[] = [];
   let failed = 0;
   let noPrints = 0;
-  const startedAt = Date.now();
+  let thin = 0;
+  const tape: string[] = [];
+
+  const gaps = new Map<string, Gap>();
+  if (schwab) {
+    const all = [...TAPE, ...names];
+    const got = await schwabGaps(schwab, all, today);
+    for (const [k, v] of got) gaps.set(k, v);
+  } else {
+    for (const etf of TAPE) { const g = await gapFor(yahoo, etf, today, now); if (g) gaps.set(etf, g); }
+  }
+  for (const etf of TAPE) { const g = gaps.get(etf); if (g) tape.push(`${etf} ${g.gapPct >= 0 ? "+" : ""}${g.gapPct.toFixed(2)}%`); }
+
   for (let i = 0; i < names.length; i++) {
     const symbol = names[i];
     try {
-      const g = await gapFor(yahoo, symbol, today, now);
+      const g = schwab ? gaps.get(symbol) ?? null : await gapFor(yahoo, symbol, today, now);
       if (!g) { noPrints++; continue; }
+      if (schwab && g.pmVolume !== null && g.pmVolume < args.minPmVolume) { thin++; continue; }
       let stats = cachedStats.get(symbol);
       if (!stats) {
         const daily = await yahoo.fetch({ symbol, interval: "1d", startMs: now - 400 * 86_400_000, endMs: now, includePrePost: false });
@@ -147,26 +175,39 @@ async function main(): Promise<void> {
     } catch {
       failed++;
     }
-    if ((i + 1) % 300 === 0) process.stdout.write(`  scanned ${i + 1}/${names.length} (${((Date.now() - startedAt) / 60_000).toFixed(1)} min)\n`);
+    if (!schwab && (i + 1) % 300 === 0) process.stdout.write(`  scanned ${i + 1}/${names.length} (${((Date.now() - startedAt) / 60_000).toFixed(1)} min)\n`);
   }
 
   const ups = rows.filter((r) => r.gapPct > 0).sort((a, b) => b.score - a.score).slice(0, args.top);
   const downs = rows.filter((r) => r.gapPct < 0).sort((a, b) => b.score - a.score).slice(0, args.top);
 
-  if (args.chains) {
-    for (const r of ups) r.contract = await pickContract(r.symbol, r.premarketLast, "C", now);
-    for (const r of downs) r.contract = await pickContract(r.symbol, r.premarketLast, "P", now);
+  // Finalists: Schwab quotes carry no pre-market high/low, so fill those from
+  // extended-hours minute bars; then name the contract.
+  for (const list of [ups, downs]) {
+    for (let i = 0; i < list.length; i++) {
+      const r = list[i];
+      if (schwab) {
+        const range = await schwabPremarketRange(schwab, r.symbol, today);
+        if (range) list[i] = { ...r, premarketHigh: range.high, premarketLow: range.low };
+      }
+      if (args.chains) {
+        const right = list === ups ? "C" : "P";
+        list[i].contract = schwab ? await schwabContract(schwab, r.symbol, r.premarketLast, right, now) : await pickContract(r.symbol, r.premarketLast, right, now);
+      }
+    }
   }
 
   const p = etParts(now);
   process.stdout.write(`\n===== Pre-market gap scan ${today} ${String(p.hour).padStart(2, "0")}:${String(p.minute).padStart(2, "0")} ET =====\n`);
-  process.stdout.write(`Source: ${source}\n`);
+  process.stdout.write(`Source: ${source}\nProvider: ${providerName}\n`);
   process.stdout.write(`Tape: ${tape.join("  ")}\n`);
-  process.stdout.write(`Scanned ${names.length}: ${rows.length} gaps >= ${args.minGapPct}%, ${noPrints} without pre-market prints, ${failed} failed, ${((Date.now() - startedAt) / 60_000).toFixed(1)} min\n`);
+  process.stdout.write(`Scanned ${names.length}: ${rows.length} gaps >= ${args.minGapPct}%, ${noPrints} without pre-market prints${schwab ? `, ${thin} below ${args.minPmVolume.toLocaleString()} pre-market shares` : ""}, ${failed} failed, ${((Date.now() - startedAt) / 60_000).toFixed(1)} min\n`);
   printTable("GAP UP (long candidates)", ups);
   printTable("GAP DOWN (put candidates)", downs);
   process.stdout.write(`\nEntry rule (catalyst gap through prior highs/lows): no pre-market orders. Enter on the first 5-minute candle that CLOSES beyond the pre-market extreme (earliest 09:35), sector ETF confirming. Stop: 5-minute close back through the 09:30 candle's opposite extreme. Targets: 1 ATR (half), 1.5 ATR (rest). Time exit 15:45. Skip if the open is more than 1.5% beyond the pre-market extreme or the sector ETF disagrees at 09:35.\n`);
-  process.stdout.write(`Option marks shown are the chain's last marks (prior close before 09:30). Read the live quote at 09:30 and pay at most 10% over that mid. Max loss is the full premium; the stop lives on the stock.\n\n`);
+  process.stdout.write(schwab
+    ? `Option marks are live from Schwab. Pay at most 10% over the mid at entry. Max loss is the full premium; the stop lives on the stock.\n\n`
+    : `Option marks shown are the chain's last marks (prior close before 09:30). Read the live quote at 09:30 and pay at most 10% over that mid. Max loss is the full premium; the stop lives on the stock.\n\n`);
 }
 
 function pickStats(e: { high20: number; low20: number; high252: number; atr14: number; avgDollarVol20: number }): Stats {
@@ -179,6 +220,7 @@ interface Gap {
   readonly premarketLow: number;
   readonly priorClose: number;
   readonly gapPct: number;
+  readonly pmVolume: number | null;
 }
 
 // One 5-minute request: today's pre-market prints plus the prior session's
@@ -197,7 +239,123 @@ async function gapFor(yahoo: YahooHistoricalBars, symbol: string, today: string,
     premarketLow: Math.min(...todays.map((b) => b.low)),
     priorClose,
     gapPct: (last / priorClose - 1) * 100,
+    pmVolume: null,
   };
+}
+
+// ----- Schwab path -----
+
+// Returns a ready SchwabRest when the provider is requested or auto-detected
+// (credentials in the environment or .env, tokens on disk), else null.
+async function schwabRestIfAvailable(provider: Args["provider"]): Promise<SchwabRest | null> {
+  if (provider === "yahoo") return null;
+  const clientId = process.env.SCHWAB_CLIENT_ID ?? "";
+  const clientSecret = process.env.SCHWAB_CLIENT_SECRET ?? "";
+  if (!clientId || !clientSecret) {
+    if (provider === "schwab") throw new Error("--provider schwab needs SCHWAB_CLIENT_ID and SCHWAB_CLIENT_SECRET (environment or .env)");
+    return null;
+  }
+  const auth = new SchwabAuth({ clientId, clientSecret, redirectUri: process.env.SCHWAB_REDIRECT_URI ?? "https://localhost:8443/callback" });
+  const loaded = await auth.load();
+  if (!loaded) {
+    if (provider === "schwab") throw new Error("No Schwab tokens in data/oauth-tokens.json. Run npm run auth (browser login; refresh token lasts 7 days).");
+    return null;
+  }
+  return new SchwabRest(auth);
+}
+
+interface SchwabQuoteFields {
+  readonly lastPrice?: number; readonly closePrice?: number; readonly totalVolume?: number; readonly tradeTime?: number;
+}
+interface SchwabExtended {
+  readonly lastPrice?: number; readonly totalVolume?: number; readonly tradeTime?: number;
+}
+
+// Batch quotes, 100 per request. Pre-market last comes from the extended
+// block when it carries a trade from today; the prior close is closePrice.
+async function schwabGaps(rest: SchwabRest, symbols: readonly string[], today: string): Promise<Map<string, Gap>> {
+  const out = new Map<string, Gap>();
+  for (let i = 0; i < symbols.length; i += 100) {
+    const chunk = symbols.slice(i, i + 100);
+    let batch: Record<string, unknown>;
+    try {
+      batch = await rest.getQuotes(chunk);
+    } catch (err) {
+      log.warn("Schwab quote batch failed", { count: chunk.length, error: err instanceof Error ? err.message : String(err) });
+      continue;
+    }
+    for (const [sym, raw] of Object.entries(batch)) {
+      const q = raw as { quote?: SchwabQuoteFields; extended?: SchwabExtended };
+      const quote = q.quote ?? {};
+      const ext = q.extended;
+      const priorClose = quote.closePrice ?? 0;
+      if (!(priorClose > 0)) continue;
+      const extIsToday = ext?.tradeTime !== undefined && etParts(ext.tradeTime).date === today;
+      const last = extIsToday && ext?.lastPrice && ext.lastPrice > 0 ? ext.lastPrice : quote.lastPrice ?? 0;
+      if (!(last > 0)) continue;
+      out.set(sym.toUpperCase(), {
+        premarketLast: last,
+        premarketHigh: last,      // refined for finalists from minute bars
+        premarketLow: last,
+        priorClose,
+        gapPct: (last / priorClose - 1) * 100,
+        pmVolume: extIsToday ? ext?.totalVolume ?? 0 : 0,
+      });
+    }
+  }
+  return out;
+}
+
+// Today's extended-hours minute bars before 09:30 ET.
+async function schwabPremarketRange(rest: SchwabRest, symbol: string, today: string): Promise<{ high: number; low: number } | null> {
+  try {
+    const h = await rest.getPriceHistory({ symbol, periodType: "day", period: 1, frequencyType: "minute", frequency: 1, needExtendedHoursData: true });
+    const pre = h.candles.filter((c) => { const p = etParts(c.datetime); return p.date === today && p.hour * 60 + p.minute < 9 * 60 + 30; });
+    if (pre.length === 0) return null;
+    return { high: Math.max(...pre.map((c) => c.high)), low: Math.min(...pre.map((c) => c.low)) };
+  } catch (err) {
+    log.debug("Schwab minute bars failed", { symbol, error: err instanceof Error ? err.message : String(err) });
+    return null;
+  }
+}
+
+// Live chain: nearest expiration at least 7 days out, strike nearest 2.5% OTM.
+async function schwabContract(rest: SchwabRest, symbol: string, price: number, right: "C" | "P", now: number): Promise<ContractPick | null> {
+  try {
+    const chain = await rest.getOptionChain({
+      symbol,
+      contractType: right === "C" ? "CALL" : "PUT",
+      strikeCount: 12,
+      includeUnderlyingQuote: false,
+      strategy: "SINGLE",
+      fromDate: etParts(now + 7 * 86_400_000).date,
+      toDate: etParts(now + 21 * 86_400_000).date,
+    });
+    const map = right === "C" ? chain.callExpDateMap : chain.putExpDateMap;
+    const expKeys = Object.keys(map).sort();
+    if (expKeys.length === 0) return null;
+    const target = right === "C" ? price * 1.025 : price * 0.975;
+    let best: { strike: number; c: { symbol: string; bid: number; ask: number; delta: number; openInterest: number } } | null = null;
+    for (const arr of Object.values(map[expKeys[0]])) {
+      for (const c of arr) {
+        if (!best || Math.abs(c.strikePrice - target) < Math.abs(best.strike - target)) best = { strike: c.strikePrice, c };
+      }
+    }
+    if (!best) return null;
+    return {
+      code: best.c.symbol.replace(/\s+/g, ""),
+      expiry: expKeys[0].slice(0, 10),
+      strike: best.strike,
+      right,
+      bid: best.c.bid,
+      ask: best.c.ask,
+      delta: Number.isFinite(best.c.delta) ? best.c.delta : null,
+      openInterest: best.c.openInterest,
+    };
+  } catch (err) {
+    log.debug("Schwab chain failed", { symbol, error: err instanceof Error ? err.message : String(err) });
+    return null;
+  }
 }
 
 interface CboeOption { option: string; bid: number; ask: number; delta?: number; open_interest: number }
@@ -238,11 +396,12 @@ async function pickContract(symbol: string, price: number, right: "C" | "P", now
 function printTable(title: string, rows: readonly Candidate[]): void {
   process.stdout.write(`\n${title}\n`);
   if (rows.length === 0) { process.stdout.write("  none\n"); return; }
-  process.stdout.write(`  ${"Sym".padEnd(6)}${"Pre-mkt".padStart(9)}${"Gap%".padStart(8)}${"PM high".padStart(9)}${"PM low".padStart(9)}${"20d hi".padStart(9)}${"52w hi".padStart(9)} >20d >52w <20dLo ${"ATR".padStart(7)} ${"$vol20".padStart(7)}  Contract (last marks)\n`);
+  process.stdout.write(`  ${"Sym".padEnd(6)}${"Pre-mkt".padStart(9)}${"Gap%".padStart(8)}${"PM vol".padStart(8)}${"PM high".padStart(9)}${"PM low".padStart(9)}${"20d hi".padStart(9)}${"52w hi".padStart(9)} >20d >52w <20dLo ${"ATR".padStart(7)} ${"$vol20".padStart(7)}  Contract\n`);
   for (const r of rows) {
     const c = r.contract;
     const contract = c === undefined ? "(chains off)" : c === null ? "no listed options" : `${c.code}  ${c.expiry} ${c.strike}${c.right}  ${c.bid.toFixed(2)}/${c.ask.toFixed(2)}${c.delta !== null ? ` d${c.delta.toFixed(2)}` : ""} oi ${c.openInterest}`;
-    process.stdout.write(`  ${r.symbol.padEnd(6)}${r.premarketLast.toFixed(2).padStart(9)}${((r.gapPct >= 0 ? "+" : "") + r.gapPct.toFixed(2)).padStart(8)}${r.premarketHigh.toFixed(2).padStart(9)}${r.premarketLow.toFixed(2).padStart(9)}${r.stats.high20.toFixed(2).padStart(9)}${r.stats.high252.toFixed(2).padStart(9)}  ${r.aboveHigh20 ? "Y" : "-"}    ${r.above52w ? "Y" : "-"}    ${r.belowLow20 ? "Y" : "-"}   ${r.stats.atr14.toFixed(2).padStart(7)} ${(r.stats.avgDollarVol20 / 1e6).toFixed(0).padStart(6)}M  ${contract}\n`);
+    const pmv = r.pmVolume === null ? "n/a" : r.pmVolume >= 1e6 ? (r.pmVolume / 1e6).toFixed(1) + "M" : (r.pmVolume / 1e3).toFixed(0) + "k";
+    process.stdout.write(`  ${r.symbol.padEnd(6)}${r.premarketLast.toFixed(2).padStart(9)}${((r.gapPct >= 0 ? "+" : "") + r.gapPct.toFixed(2)).padStart(8)}${pmv.padStart(8)}${r.premarketHigh.toFixed(2).padStart(9)}${r.premarketLow.toFixed(2).padStart(9)}${r.stats.high20.toFixed(2).padStart(9)}${r.stats.high252.toFixed(2).padStart(9)}  ${r.aboveHigh20 ? "Y" : "-"}    ${r.above52w ? "Y" : "-"}    ${r.belowLow20 ? "Y" : "-"}   ${r.stats.atr14.toFixed(2).padStart(7)} ${(r.stats.avgDollarVol20 / 1e6).toFixed(0).padStart(6)}M  ${contract}\n`);
   }
 }
 
