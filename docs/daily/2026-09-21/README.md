@@ -1,15 +1,15 @@
-# Daily packet 2026-09-21 1824 ET
+# Daily packet 2026-09-21 1827 ET
 
-Provider: yahoo (5m bars, no pre-market volume) because yahoo requested
-Tape: SPY +1.43%  QQQ +2.77%  IWM +0.56%  SMH +4.32%  XBI +1.10%  XLF -0.18%  XLE -2.86%  XLK +2.86%  XLV +0.37%  XLI -0.01%  XLY +1.08%
+Provider: schwab (real-time batch quotes; Windows vault)
+Tape: SPY +0.58%  QQQ +0.86%  IWM +0.47%  SMH +1.26%  XBI +0.77%  XLF +0.28%  XLE -0.67%  XLK +0.86%  XLV +0.42%  XLI +0.42%  XLY +1.40%
 
-Star rows (H-GAP-SECTOR-LONG spec): CRML, AMD, VICR
-Other gap rows: none
-Swing: Breadth: 12 names down 3 sessions >= 1.5 ATR above their 200-day (0 with drops >= 2.5 ATR)  ->  STAND ASIDE (breadth below 75)
-Jev: skipped (--no-jev)
+Star rows (H-GAP-SECTOR-LONG spec): CRML, GRAL, FIVN, FSLY, DOCN, VICR, RMBS
+Other gap rows: TWLO [UP: WATCH], P [UP: WATCH], OUST [UP: WATCH], COHU [UP: WATCH], QXO [UP: WATCH], RSI [DOWN: WATCH], MHK [DOWN: WATCH], CXW [DOWN: WATCH], PBF [DOWN: WATCH], DINO [DOWN: WATCH], SM [DOWN: WATCH], SMMT [DOWN: WATCH]
+Swing: Breadth: 19 names down 3 sessions >= 1.5 ATR above their 200-day (0 with drops >= 2.5 ATR)  ->  STAND ASIDE (breadth below 75)
+Jev: ok (review-3f7da6c0-01ea-4c2a-bf95-1048b70ec9f0.md)
 
 
-Files: scan-gap.txt, scan-swing.txt, news.md
+Files: scan-gap.txt, scan-swing.txt, news.md, jev.md
 
 ## Forward log
 

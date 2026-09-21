@@ -6,15 +6,30 @@
 - 2026-09-21T15:02Z [Stocktwits] CRML Stock Heads For Best Day In Nearly A Year – Why This Analyst Sees A Further 110% Upside (https://finance.yahoo.com/markets/stocks/articles/crml-stock-heads-best-day-150225678.html)
 - 2026-09-21T01:50Z [Stocktwits] CRML, GLND, GRML Surge Overnight After Trump Unveils ‘Permanent’ US Security Deal For Greenland (https://finance.yahoo.com/markets/stocks/articles/crml-glnd-grml-surge-overnight-015054024.html)
 
-## AMD (9)
-- 2026-09-21T22:18Z [Simply Wall St.] Advanced Micro Devices (AMD) Is Up 24.7% After Expanding Its Role In Regulated AI Infrastructure – Has The Bull Case Changed? (https://finance.yahoo.com/technology/ai/articles/advanced-micro-devices-amd-24-221840955.html)
-- 2026-09-21T22:04Z [Stocktwits] Nasdaq Ends Nearly 3% Higher As AI Stocks Pop, AMD Enters $1 Trillion Club —  AMD, ARM, META, AMZN, PSKY In Focus (https://finance.yahoo.com/markets/stocks/articles/nasdaq-ends-nearly-3-higher-220454998.html)
-- 2026-09-21T21:13Z [Investor's Business Daily] Dow Jones Futures: Falling Oil Prices, Yields Spark Market Rally; AMD, Intel, Micron, Nvidia, Sandisk Are Key Movers (https://finance.yahoo.com/m/bc32a5e1-f207-3311-ba0b-143bb01bd032/dow-jones-futures%3A-falling.html)
-- 2026-09-21T20:40Z [Barrons.com] AMD, Intel, Meta, Warner Bros., Moderna, Grail, Strategy, and More Stocks That Explain Today’s Market (https://finance.yahoo.com/m/6c151bf6-d6e0-326a-905a-75334358e038/amd%2C-intel%2C-meta%2C-warner.html)
-- 2026-09-21T20:39Z [Barrons.com] Meta’s Muse AI Agent Triggers Intel, Chip Stock Rally. AMD Hits $1T Market Cap. (https://finance.yahoo.com/m/96f093e9-37a1-34c6-9da9-e24f0b868868/meta%E2%80%99s-muse-ai-agent-triggers.html)
-- 2026-09-21T20:33Z [Investor's Business Daily] Chip Stocks Rise As Four New Names Join SOX Index. AMD Breaks Out. (https://finance.yahoo.com/m/962f9419-3a45-3b55-ac87-70b396098e6c/chip-stocks-rise-as-four-new.html)
-- 2026-09-21T20:31Z [Investor's Business Daily] Stock Market Today: Dow Up, Nasdaq Roars To Record As Micron Does This; AMD Hits New High (Live Coverage) (https://finance.yahoo.com/m/b7ca9b65-19fd-32e7-bad5-f53a1ee49def/stock-market-today%3A-dow-up%2C.html)
-- 2026-09-21T20:07Z [Investopedia] AMD Joins the $1 Trillion Market Cap Club (https://finance.yahoo.com/markets/stocks/articles/amd-joins-1-trillion-market-200715805.html)
+## GRAL (2)
+- 2026-09-21T20:50Z [Stocktwits] GRAL Stock Clocks Best Day In Over 1.5 Years — FDA Papers Lift Galleri Approval Hopes (https://finance.yahoo.com/healthcare/articles/gral-stock-clocks-best-day-205018255.html)
+- 2026-09-21T11:06Z [Stocktwits] FDA Decision Watch: MRK, MIRM, INCY, GRAL Face Key Regulatory Catalysts This Week (https://finance.yahoo.com/healthcare/articles/fda-decision-watch-mrk-mirm-110643425.html)
+
+## FIVN (0)
+- (no headlines in the last 24h; check the platform news feed before treating a gap as a catalyst)
+
+## FSLY (1)
+- 2026-09-21T13:17Z [Insider Monkey] Should You Be Bullish on Fastly (FSLY)? (https://finance.yahoo.com/markets/stocks/articles/bullish-fastly-fsly-131746101.html)
+
+## DOCN (1)
+- 2026-09-21T21:26Z [StockStory] Q2 Earnings Outperformers: DigitalOcean (NYSE:DOCN) And The Rest Of The Data Storage Stocks (https://finance.yahoo.com/markets/stocks/articles/q2-earnings-outperformers-digitalocean-nyse-212625521.html)
 
 ## VICR (0)
+- (no headlines in the last 24h; check the platform news feed before treating a gap as a catalyst)
+
+## RMBS (0)
+- (no headlines in the last 24h; check the platform news feed before treating a gap as a catalyst)
+
+## TWLO (0)
+- (no headlines in the last 24h; check the platform news feed before treating a gap as a catalyst)
+
+## P (0)
+- (no headlines in the last 24h; check the platform news feed before treating a gap as a catalyst)
+
+## OUST (0)
 - (no headlines in the last 24h; check the platform news feed before treating a gap as a catalyst)
