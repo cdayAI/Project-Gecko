@@ -48,6 +48,13 @@ export interface SchwabAuthConfig {
   readonly redirectUri: string;
 }
 
+// Research callers can keep tokens in encrypted storage. Existing broker
+// callers retain the legacy file store unless they explicitly supply one.
+export interface SchwabTokenStore {
+  load(): Promise<PersistedTokens | null>;
+  save(tokens: PersistedTokens): Promise<void>;
+}
+
 export class SchwabAuth {
   private accessToken: string | null = null;
   private refreshToken: string | null = null;
@@ -56,8 +63,13 @@ export class SchwabAuth {
 
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private reauthWarned = false;
+  private refreshInFlight: Promise<void> | null = null;
+  private persistenceFailed = false;
 
-  constructor(private readonly config: SchwabAuthConfig) {}
+  constructor(
+    private readonly config: SchwabAuthConfig,
+    private readonly tokenStore?: SchwabTokenStore,
+  ) {}
 
   // ----- Public API -----
 
@@ -81,8 +93,7 @@ export class SchwabAuth {
     });
 
     const resp = await this.postTokenEndpoint(body);
-    this.applyTokenResponse(resp, /* fromRefresh */ false);
-    await this.persist();
+    await this.acceptTokenResponse(resp, /* fromRefresh */ false);
     log.info("Initial OAuth exchange complete", {
       accessTokenExpiresIn: `${Math.round((this.accessTokenExpiresAt - Date.now()) / 1000)}s`,
       refreshTokenExpiresIn: `${Math.round(this.refreshTtlMs() / 1000 / 60 / 60)}h`,
@@ -92,14 +103,17 @@ export class SchwabAuth {
   // Load tokens from disk (call once at startup before getAccessToken()).
   async load(): Promise<boolean> {
     try {
-      if (!fs.existsSync(TOKEN_FILE)) return false;
-      const raw = fs.readFileSync(TOKEN_FILE, "utf-8");
-      const parsed = JSON.parse(raw) as Partial<PersistedTokens>;
+      if (!this.tokenStore && !fs.existsSync(TOKEN_FILE)) return false;
+      const parsed: unknown = this.tokenStore
+        ? await this.tokenStore.load()
+        : JSON.parse(fs.readFileSync(TOKEN_FILE, "utf-8"));
+      if (parsed === null) return false;
       if (
-        typeof parsed.accessToken !== "string" ||
-        typeof parsed.refreshToken !== "string" ||
-        typeof parsed.accessTokenExpiresAt !== "number" ||
-        typeof parsed.refreshTokenIssuedAt !== "number"
+        typeof parsed !== "object" ||
+        !("accessToken" in parsed) || !validToken(parsed.accessToken) ||
+        !("refreshToken" in parsed) || !validToken(parsed.refreshToken) ||
+        !("accessTokenExpiresAt" in parsed) || !validTimestamp(parsed.accessTokenExpiresAt) ||
+        !("refreshTokenIssuedAt" in parsed) || !validTimestamp(parsed.refreshTokenIssuedAt)
       ) {
         log.error("Token file is malformed; ignoring");
         return false;
@@ -113,20 +127,22 @@ export class SchwabAuth {
         refreshTtlRemaining: `${Math.round(this.refreshTtlMs() / 1000 / 60 / 60)}h`,
       });
       return true;
-    } catch (err) {
-      log.error("Failed to load tokens", { error: errMsg(err) });
+    } catch {
+      // JSON parsing and custom-store exceptions may contain credential text.
+      log.error("Failed to load tokens; sensitive details withheld");
       return false;
     }
   }
 
   // Return a valid access token, refreshing if it is within REFRESH_LEAD_MS of expiry.
   async getAccessToken(): Promise<string> {
+    if (this.persistenceFailed) throw new Error("Credential persistence failed; restart research after checking storage.");
     if (!this.refreshToken) {
-      throw new Error("No refresh token loaded. Run `npm run auth` to authorize.");
+      throw new Error("No refresh token loaded. Complete the established local authorization flow.");
     }
     if (this.refreshTtlMs() <= 0) {
       throw new Error(
-        "Refresh token expired (Schwab 7-day wall). Run `npm run auth` to re-authorize.",
+        "Refresh token expired (Schwab 7-day wall). Complete the established local authorization flow again.",
       );
     }
     if (this.accessToken && Date.now() < this.accessTokenExpiresAt - REFRESH_LEAD_MS) {
@@ -171,6 +187,17 @@ export class SchwabAuth {
   // ----- Internals -----
 
   private async refresh(): Promise<void> {
+    if (this.persistenceFailed) throw new Error("Credential persistence failed; restart research after checking storage.");
+    if (this.refreshInFlight) return this.refreshInFlight;
+    this.refreshInFlight = this.refreshOnce();
+    try {
+      await this.refreshInFlight;
+    } finally {
+      this.refreshInFlight = null;
+    }
+  }
+
+  private async refreshOnce(): Promise<void> {
     if (!this.refreshToken) {
       throw new Error("Cannot refresh: no refresh token.");
     }
@@ -183,9 +210,8 @@ export class SchwabAuth {
       refresh_token: this.refreshToken,
     });
 
-    const resp = await this.postTokenEndpoint(body);
-    this.applyTokenResponse(resp, /* fromRefresh */ true);
-    await this.persist();
+    const resp = await this.postTokenEndpoint(body, this.refreshToken);
+    await this.acceptTokenResponse(resp, /* fromRefresh */ true);
     log.info("Access token refreshed", {
       accessTokenExpiresIn: `${Math.round((this.accessTokenExpiresAt - Date.now()) / 1000)}s`,
       refreshTtlRemainingHrs: Math.round(this.refreshTtlMs() / 1000 / 60 / 60),
@@ -217,18 +243,18 @@ export class SchwabAuth {
     await this.refresh();
   }
 
-  private async postTokenEndpoint(body: URLSearchParams): Promise<OAuthTokenResponse> {
+  private async postTokenEndpoint(body: URLSearchParams, previousRefreshToken?: string): Promise<OAuthTokenResponse> {
     const basic = Buffer.from(`${this.config.clientId}:${this.config.clientSecret}`).toString("base64");
 
-    // Single attempt with timeout. OAuth errors (invalid_grant, invalid_client)
-    // carry their meaning in the response body; retrying blindly hides them.
+    // Single attempt. Never expose response bodies or transport exceptions:
+    // either can contain a token, submitted form, or another secret.
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 10_000);
 
-    let resp: Response;
     try {
-      resp = await fetch(TOKEN_URL, {
+      const resp = await fetch(TOKEN_URL, {
         method: "POST",
+        redirect: "error",
         headers: {
           Authorization: `Basic ${basic}`,
           "Content-Type": "application/x-www-form-urlencoded",
@@ -236,48 +262,59 @@ export class SchwabAuth {
         body: body.toString(),
         signal: controller.signal,
       });
+      if (!resp.ok) {
+        await resp.body?.cancel().catch(() => {});
+        throw new TokenResponseError(`Schwab OAuth returned HTTP ${resp.status}; response body withheld.`);
+      }
+      const json: unknown = await resp.json();
+      if (typeof json !== "object" || json === null ||
+          !("access_token" in json) || !validToken(json.access_token) ||
+          ("refresh_token" in json ? !validToken(json.refresh_token) : !validToken(previousRefreshToken)) ||
+          !("expires_in" in json) || typeof json.expires_in !== "number" ||
+          !Number.isFinite(json.expires_in) || json.expires_in <= 0 || json.expires_in > 86_400 ||
+          !("token_type" in json) || typeof json.token_type !== "string" || json.token_type.toLowerCase() !== "bearer") {
+        throw new TokenResponseError("Schwab OAuth returned invalid token fields; response body withheld.");
+      }
+      return { ...json, refresh_token: "refresh_token" in json ? json.refresh_token : previousRefreshToken } as OAuthTokenResponse;
+    } catch (err) {
+      if (err instanceof TokenResponseError) throw err;
+      throw new Error("Schwab OAuth request or decoding failed; sensitive details withheld.");
     } finally {
       clearTimeout(timer);
     }
-
-    if (!resp.ok) {
-      const text = await resp.text().catch(() => "");
-      throw new Error(`Schwab token endpoint returned ${resp.status}: ${text.slice(0, 300)}`);
-    }
-    const json = (await resp.json()) as Partial<OAuthTokenResponse>;
-    if (
-      typeof json.access_token !== "string" ||
-      typeof json.refresh_token !== "string" ||
-      typeof json.expires_in !== "number" ||
-      typeof json.token_type !== "string"
-    ) {
-      throw new Error(`Schwab token response missing required fields: ${JSON.stringify(Object.keys(json))}`);
-    }
-    return json as OAuthTokenResponse;
   }
 
-  private applyTokenResponse(resp: OAuthTokenResponse, fromRefresh: boolean): void {
-    this.accessToken = resp.access_token;
-    this.refreshToken = resp.refresh_token;
-    this.accessTokenExpiresAt = Date.now() + resp.expires_in * 1000;
+  private async acceptTokenResponse(resp: OAuthTokenResponse, fromRefresh: boolean): Promise<void> {
+    const tokens: PersistedTokens = {
+      accessToken: resp.access_token,
+      refreshToken: resp.refresh_token,
+      accessTokenExpiresAt: Date.now() + resp.expires_in * 1000,
+      refreshTokenIssuedAt: fromRefresh ? this.refreshTokenIssuedAt : Date.now(),
+    };
+    // Do not expose a refreshed credential until its persistence succeeds.
+    try {
+      await this.persist(tokens);
+    } catch {
+      this.persistenceFailed = true;
+      throw new Error("Credential persistence failed; restart research after checking storage.");
+    }
+    this.accessToken = tokens.accessToken;
+    this.refreshToken = tokens.refreshToken;
+    this.accessTokenExpiresAt = tokens.accessTokenExpiresAt;
     // The refresh-token clock only resets on a fresh /authorize flow, NOT on refresh.
     // (Per Schwab docs and multiple SDK implementations: refresh_token stays constant
     // through the 7-day window.) So only stamp refreshTokenIssuedAt on initial exchange.
     if (!fromRefresh) {
-      this.refreshTokenIssuedAt = Date.now();
+      this.refreshTokenIssuedAt = tokens.refreshTokenIssuedAt;
       this.reauthWarned = false;
     }
   }
 
-  private async persist(): Promise<void> {
-    if (!this.accessToken || !this.refreshToken) return;
-
-    const tokens: PersistedTokens = {
-      accessToken: this.accessToken,
-      refreshToken: this.refreshToken,
-      accessTokenExpiresAt: this.accessTokenExpiresAt,
-      refreshTokenIssuedAt: this.refreshTokenIssuedAt,
-    };
+  private async persist(tokens: PersistedTokens): Promise<void> {
+    if (this.tokenStore) {
+      await this.tokenStore.save(tokens);
+      return;
+    }
 
     const dir = path.dirname(TOKEN_FILE);
     if (!fs.existsSync(dir)) {
@@ -291,6 +328,16 @@ export class SchwabAuth {
       // Non-fatal: best effort on Windows.
     }
   }
+}
+
+class TokenResponseError extends Error {}
+
+function validToken(value: unknown): value is string {
+  return typeof value === "string" && /^[\x21-\x7e]{1,32768}$/.test(value);
+}
+
+function validTimestamp(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 && value <= 8.64e15;
 }
 
 function errMsg(err: unknown): string {

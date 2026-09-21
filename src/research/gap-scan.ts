@@ -5,9 +5,10 @@
 //   npm run scan:gap -- --min-gap 3 --top 15
 //   npm run scan:gap -- --symbols AMD,HOOD    # explicit list, stats fetched live
 //   npm run scan:gap -- --provider schwab     # Schwab Trader API (thinkorswim data)
+//   npm run scan:gap -- --provider schwab --check-connection  # bounded data-only check
 //
-// Providers: "auto" (default) uses Schwab when SCHWAB_CLIENT_ID/SECRET are set
-// and data/oauth-tokens.json loads (npm run auth), otherwise Yahoo. Schwab
+// Providers: "auto" (default) first uses the existing Windows DPAPI vault,
+// then legacy environment credentials + data/oauth-tokens.json, otherwise Yahoo. Schwab
 // batches 100 quotes per request (real-time, with pre-market volume), pulls
 // pre-market high/low from extended-hours minute bars for finalists, and
 // names the contract from the live chain with Greeks. Yahoo is one 5-minute
@@ -28,6 +29,7 @@
 import "dotenv/config";
 import { createLogger, setLogLevel } from "../core/logger.js";
 import { SchwabAuth } from "../brokers/schwab/auth.js";
+import { loadWindowsVaultAuth } from "../brokers/schwab/windows-vault.js";
 import { SchwabRest } from "../brokers/schwab/rest.js";
 import { etParts } from "../utils/time.js";
 import { YahooHistoricalBars } from "../data/yahoo-historical.js";
@@ -55,10 +57,11 @@ interface Args {
   chains: boolean;
   provider: "auto" | "yahoo" | "schwab";
   minPmVolume: number;                 // Schwab only: pre-market shares traded
+  checkConnection: boolean;
 }
 
 function parseArgs(argv: readonly string[]): Args {
-  const out: Args = { symbols: null, minGapPct: 2.5, top: 12, maxNames: 1500, chains: true, provider: "auto", minPmVolume: 25_000 };
+  const out: Args = { symbols: null, minGapPct: 2.5, top: 12, maxNames: 1500, chains: true, provider: "auto", minPmVolume: 25_000, checkConnection: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--symbols") out.symbols = (argv[++i] ?? "").split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
@@ -68,6 +71,7 @@ function parseArgs(argv: readonly string[]): Args {
     else if (a === "--no-chains") out.chains = false;
     else if (a === "--provider") { const v = (argv[++i] ?? "").toLowerCase(); if (v === "yahoo" || v === "schwab" || v === "auto") out.provider = v; }
     else if (a === "--min-pm-volume") out.minPmVolume = Number(argv[++i]);
+    else if (a === "--check-connection") out.checkConnection = true;
   }
   return out;
 }
@@ -110,6 +114,12 @@ interface ContractPick {
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   setLogLevel("warn");
+  const schwab = await schwabRestIfAvailable(args.provider);
+  if (args.checkConnection) {
+    if (!schwab) throw new Error("Connection check requires a configured Schwab connection; use --provider schwab.");
+    await checkSchwabConnection(schwab);
+    return;
+  }
   const yahoo = new YahooHistoricalBars();
   const now = Date.now();
   const today = etParts(now).date;
@@ -133,8 +143,7 @@ async function main(): Promise<void> {
   }
 
   // Data source.
-  const schwab = await schwabRestIfAvailable(args.provider);
-  const providerName = schwab ? "schwab (real-time, batch quotes)" : "yahoo (5m bars, no pre-market volume)";
+  const providerName = schwab ? "schwab (batch quotes; freshness must be checked)" : "yahoo (5m bars, no pre-market volume)";
 
   const startedAt = Date.now();
   const rows: Candidate[] = [];
@@ -206,7 +215,7 @@ async function main(): Promise<void> {
   printTable("GAP DOWN (put candidates)", downs);
   process.stdout.write(`\nEntry rule (catalyst gap through prior highs/lows): no pre-market orders. Enter on the first 5-minute candle that CLOSES beyond the pre-market extreme (earliest 09:35), sector ETF confirming. Stop: 5-minute close back through the 09:30 candle's opposite extreme. Targets: 1 ATR (half), 1.5 ATR (rest). Time exit 15:45. Skip if the open is more than 1.5% beyond the pre-market extreme or the sector ETF disagrees at 09:35.\n`);
   process.stdout.write(schwab
-    ? `Option marks are live from Schwab. Pay at most 10% over the mid at entry. Max loss is the full premium; the stop lives on the stock.\n\n`
+    ? `Option marks are snapshots from Schwab; verify contract timestamps, delay flags and current bid/ask before manual review. Historical statistics may use the saved universe or Yahoo. Scanner rows are research candidates, not qualified trade plans.\n\n`
     : `Option marks shown are the chain's last marks (prior close before 09:30). Read the live quote at 09:30 and pay at most 10% over that mid. Max loss is the full premium; the stop lives on the stock.\n\n`);
 }
 
@@ -246,22 +255,65 @@ async function gapFor(yahoo: YahooHistoricalBars, symbol: string, today: string,
 // ----- Schwab path -----
 
 // Returns a ready SchwabRest when the provider is requested or auto-detected
-// (credentials in the environment or .env, tokens on disk), else null.
+// (Windows encrypted vault first, legacy environment/file second), else null.
 async function schwabRestIfAvailable(provider: Args["provider"]): Promise<SchwabRest | null> {
   if (provider === "yahoo") return null;
+  // An existing but unreadable/malformed vault fails closed; never silently
+  // switch to a different provider or write plaintext copies of its secrets.
+  const vaultAuth = await loadWindowsVaultAuth();
+  if (vaultAuth) return new SchwabRest(vaultAuth, { marketDataOnly: true });
   const clientId = process.env.SCHWAB_CLIENT_ID ?? "";
   const clientSecret = process.env.SCHWAB_CLIENT_SECRET ?? "";
   if (!clientId || !clientSecret) {
-    if (provider === "schwab") throw new Error("--provider schwab needs SCHWAB_CLIENT_ID and SCHWAB_CLIENT_SECRET (environment or .env)");
+    if (provider === "schwab") throw new Error("No saved Windows Schwab vault or legacy Schwab credentials found. Use the established local Schwab setup; do not paste credentials into chat.");
     return null;
   }
   const auth = new SchwabAuth({ clientId, clientSecret, redirectUri: process.env.SCHWAB_REDIRECT_URI ?? "https://localhost:8443/callback" });
   const loaded = await auth.load();
   if (!loaded) {
-    if (provider === "schwab") throw new Error("No Schwab tokens in data/oauth-tokens.json. Run npm run auth (browser login; refresh token lasts 7 days).");
+    if (provider === "schwab") throw new Error("Legacy Schwab credentials are set, but no saved tokens were found. Complete the established local authorization flow.");
     return null;
   }
-  return new SchwabRest(auth);
+  return new SchwabRest(auth, { marketDataOnly: true });
+}
+
+// Exercises exactly the scanner's three market-data routes without running
+// a screen, fetching Yahoo data or emitting entry/exit recommendations.
+async function checkSchwabConnection(rest: SchwabRest): Promise<void> {
+  const startedAt = Date.now();
+  const quotes = await rest.getQuotes(["SPY", "QQQ"]);
+  const positive = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value > 0;
+  for (const symbol of ["SPY", "QQQ"]) {
+    const quote = quotes[symbol];
+    if (!quote?.quote || quote.symbol !== symbol || !positive(quote.quote.bidPrice) ||
+        !positive(quote.quote.askPrice) || quote.quote.askPrice < quote.quote.bidPrice || !positive(quote.quote.lastPrice)) {
+      throw new Error(`Schwab connection check: missing ${symbol} quote`);
+    }
+  }
+  const history = await rest.getPriceHistory({ symbol: "SPY", periodType: "day", period: 1, frequencyType: "minute", frequency: 1, needExtendedHoursData: true });
+  const usableCandles = history.candles.filter((c) => c && positive(c.datetime) && c.datetime <= 8.64e15 &&
+    [c.open, c.high, c.low, c.close].every(positive) && c.low <= Math.min(c.open, c.close) && c.high >= Math.max(c.open, c.close));
+  if (history.symbol !== "SPY" || usableCandles.length === 0) throw new Error("Schwab connection check: missing SPY history");
+  const chain = await rest.getOptionChain({ symbol: "SPY", contractType: "ALL", strikeCount: 2, strategy: "SINGLE", fromDate: etParts(startedAt + 7 * 86_400_000).date, toDate: etParts(startedAt + 14 * 86_400_000).date });
+  const contracts = [chain.callExpDateMap, chain.putExpDateMap]
+    .flatMap((map) => Object.values(map ?? {})).flatMap((strikes) => Object.values(strikes ?? {})).flat()
+    .filter((c) => c && typeof c.symbol === "string" && /^SPY\s+\d{6}[CP]\d{8}$/.test(c.symbol) &&
+      positive(c.strikePrice) && positive(c.bid) && positive(c.ask) && c.ask >= c.bid);
+  if (chain.symbol !== "SPY" || chain.status !== "SUCCESS" || !(chain.numberOfContracts > 0) || contracts.length === 0) throw new Error("Schwab connection check: missing SPY option contracts");
+  const quoteChecks = ["SPY", "QQQ"].map((symbol) => {
+    const quote = quotes[symbol];
+    const timestamp = quote.quote.quoteTime;
+    const clock = typeof timestamp === "number" && Number.isFinite(timestamp) ? new Date(timestamp) : null;
+    const validClock = clock !== null && Number.isFinite(clock.getTime());
+    const flags = quote as typeof quote & { realtime?: unknown };
+    return { symbol, quoteTimeUtc: validClock ? clock.toISOString() : null, ageSeconds: validClock ? Math.round((Date.now() - clock.getTime()) / 1000) : null, realtime: typeof flags.realtime === "boolean" ? flags.realtime : null };
+  });
+  process.stdout.write(`${JSON.stringify({
+    status: "CONNECTED", checkedAtUtc: new Date().toISOString(), scope: "market-data-only",
+    quotes: quoteChecks, history: { symbol: history.symbol, usableCandles: usableCandles.length },
+    chain: { symbol: chain.symbol, reportedContracts: chain.numberOfContracts, usableContracts: contracts.length, isDelayed: typeof chain.isDelayed === "boolean" ? chain.isDelayed : null },
+    qualification: "Connectivity only; no screening, orders or trade qualification.",
+  }, null, 2)}\n`);
 }
 
 interface SchwabQuoteFields {
