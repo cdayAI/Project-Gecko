@@ -24,7 +24,8 @@
     "report": "node --import tsx src/monitoring/daily-report-cli.ts",
     "research": "node --import tsx src/research/research-cli.ts",
     "research:selftest": "node --import tsx src/research/providers/webull/signer-selftest.ts",
-    "scan:gap": "node --import tsx src/research/gap-scan.ts"
+    "scan:gap": "node --import tsx src/research/gap-scan.ts",
+    "universe:build": "node --import tsx src/research/universe.ts"
   },
   "dependencies": {
     "dotenv": "^16",

@@ -29,7 +29,8 @@ const CACHE_DIR = path.join("data", "yahoo-cache");
 const DAY_MS = 24 * 60 * 60 * 1000;
 // Yahoo rate-limits datacenter IPs. Space network requests out; cache hits
 // never wait.
-const MIN_REQUEST_GAP_MS = 400;
+// Override with YAHOO_MIN_GAP_MS for large universe builds (250 is usually tolerated).
+const MIN_REQUEST_GAP_MS = Number(process.env.YAHOO_MIN_GAP_MS ?? "400") > 0 ? Number(process.env.YAHOO_MIN_GAP_MS ?? "400") : 400;
 let lastRequestAt = 0;
 
 export type YahooInterval = "1m" | "5m" | "15m" | "1h" | "1d";
