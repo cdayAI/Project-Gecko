@@ -63,7 +63,8 @@ interface Args {
 }
 
 function parseArgs(argv: readonly string[]): Args {
-  const out: Args = { symbols: null, minGapPct: 2.5, top: 12, maxNames: 1500, chains: true, provider: "auto", minPmVolume: 25_000, checkConnection: false };
+  // Default minimum gap 5%: the registered tests found 3 to 5% gaps lost money.
+  const out: Args = { symbols: null, minGapPct: 5, top: 12, maxNames: 1500, chains: true, provider: "auto", minPmVolume: 25_000, checkConnection: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--symbols") out.symbols = (argv[++i] ?? "").split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
@@ -179,8 +180,11 @@ async function main(): Promise<void> {
     if (!schwab && (i + 1) % 300 === 0) process.stdout.write(`  scanned ${i + 1}/${names.length} (${((Date.now() - startedAt) / 60_000).toFixed(1)} min)\n`);
   }
 
-  const ups = rows.filter((r) => r.gapPct > 0).sort((a, b) => b.score - a.score).slice(0, args.top);
-  const downs = rows.filter((r) => r.gapPct < 0).sort((a, b) => b.score - a.score).slice(0, args.top);
+  // Tiers from the registered tests: only 10%+ gaps held out of sample.
+  const TRADE_GAP = 10;
+  const tier = (list: Candidate[]): Candidate[] => [...list.filter((r) => Math.abs(r.gapPct) >= TRADE_GAP), ...list.filter((r) => Math.abs(r.gapPct) < TRADE_GAP)];
+  const ups = tier(rows.filter((r) => r.gapPct > 0).sort((a, b) => b.score - a.score)).slice(0, args.top);
+  const downs = tier(rows.filter((r) => r.gapPct < 0).sort((a, b) => b.score - a.score)).slice(0, args.top);
 
   // Finalists: Schwab quotes carry no pre-market high/low, so fill those from
   // extended-hours minute bars; then name the contract.
@@ -204,9 +208,11 @@ async function main(): Promise<void> {
   process.stdout.write(`Source: ${source}\nProvider: ${providerName}\n`);
   process.stdout.write(`Tape: ${tape.join("  ")}\n`);
   process.stdout.write(`Scanned ${names.length}: ${rows.length} gaps >= ${args.minGapPct}%, ${noPrints} without pre-market prints${schwab ? `, ${thin} below ${args.minPmVolume.toLocaleString()} pre-market shares` : ""}, ${failed} failed, ${((Date.now() - startedAt) / 60_000).toFixed(1)} min\n`);
-  printTable("GAP UP (long candidates)", ups);
-  printTable("GAP DOWN (put candidates)", downs);
-  process.stdout.write(`\nEntry rule (catalyst gap through prior highs/lows): no pre-market orders. Enter on the first 5-minute candle that CLOSES beyond the pre-market extreme (earliest 09:35), sector ETF confirming. Stop: 5-minute close back through the 09:30 candle's opposite extreme. Targets: 1 ATR (half), 1.5 ATR (rest). Time exit 15:45. Skip if the open is more than 1.5% beyond the pre-market extreme or the sector ETF disagrees at 09:35.\n`);
+  printTable(`GAP UP: TRADE CANDIDATES (gap >= ${TRADE_GAP}%, the only bucket positive out of sample)`, ups.filter((r) => r.gapPct >= TRADE_GAP));
+  printTable("GAP UP: WATCH ONLY (5-10%; coin flip in the tests, needs a catalyst and 52w structure)", ups.filter((r) => r.gapPct < TRADE_GAP));
+  printTable(`GAP DOWN: TRADE CANDIDATES (gap <= -${TRADE_GAP}%)`, downs.filter((r) => r.gapPct <= -TRADE_GAP));
+  printTable("GAP DOWN: WATCH ONLY (-5 to -10%)", downs.filter((r) => r.gapPct > -TRADE_GAP));
+  process.stdout.write(`\nEntry rule (H-GAP-GO as registered; see docs/gap-and-go-registration-2026-09-21.md): no pre-market orders. Enter on the first 5-minute candle that CLOSES beyond the pre-market extreme (earliest 09:35). Stop: 5-minute close back through the 09:30 candle's opposite extreme. Targets: 1 ATR (half), 1.5 ATR (rest). Time exit 15:45. Skip if the open is more than 1.5% beyond the pre-market extreme. Trade the 10%+ tier only (about 55-63% win on the stock, PF 1.5-1.8 in both test windows); the tests could not raise that win rate with tighter targets, time exits, wider stops or sector confirmation without losing money out of sample, so do not improvise those.\n`);
   process.stdout.write(schwab
     ? `Option marks are live from Schwab. Pay at most 10% over the mid at entry. Max loss is the full premium; the stop lives on the stock.\n\n`
     : `Option marks shown are the chain's last marks (prior close before 09:30). Read the live quote at 09:30 and pay at most 10% over that mid. Max loss is the full premium; the stop lives on the stock.\n\n`);

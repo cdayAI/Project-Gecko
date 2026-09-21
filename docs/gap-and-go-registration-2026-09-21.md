@@ -182,3 +182,55 @@ large search on a small sample; the validation window (about 18
 sessions) is the only defense and is itself small. The chosen variant is
 a forward-test hypothesis; the one-lever table is the more trustworthy
 output. No further search after this run.
+
+## H-GAP-WR results (2026-09-21, ~20:15 UTC)
+
+815 candidate contexts over 39 sessions (2026-07-27 through 2026-09-18;
+the first two sessions lacked enough pre-market bars). All 480 variants
+at 10 bps per side are in docs/gap-grid-10bps-2026-09-21.csv.
+
+Chosen by the declared criterion: gap >= 5%, 20-day structure, both
+directions, +1% limit exit, stop at the pre-market extreme, confirmation
+by 09:40, no sector gate. Selection: n=125, 87.2% win, +0.28%, PF 1.57.
+**Validation: n=29, 65.5% win, -0.30% per trade, PF 0.65. FAILS.**
+
+Every variant in the top twelve by selection win rate is negative on the
+validation window (PF 0.39 to 0.85). They share the same construction: a
+small fixed target with a wide stop. That buys a high win rate in a
+trending period (selection, late July to August 20) and gives it back in
+a choppy one (validation, after the September 16 rate hike). The base
+rule was also negative in the validation window (-0.17%, PF 0.86).
+
+One lever at a time from the base (selection / validation):
+
+| Lever | Selection | Validation | Held? |
+|---|---|---|---|
+| gap >= 10% | 63.2% win, +1.03%, PF 1.80 (n=57) | 52.9%, +0.79%, PF 1.50 (n=17) | yes |
+| 52-week structure | 58.8%, +0.13%, PF 1.09 (n=34) | 66.7%, +1.99%, PF 4.47 (n=12) | too few to say |
+| long only | 48.7%, +0.10%, PF 1.10 | 52.4%, +0.03%, PF 1.03 | neutral |
+| +1% limit exit | 73.9%, +0.06%, PF 1.10 | 55.6%, -0.39%, PF 0.55 | no |
+| +2% limit exit | 59.9%, +0.12%, PF 1.14 | 47.2%, -0.28%, PF 0.72 | no |
+| 10:30 time exit | 55.3%, +0.54%, PF 1.76 | 36.1%, -0.16%, PF 0.82 | no |
+| 12:00 time exit | 47.5%, +0.09%, PF 1.09 | 36.1%, -0.17%, PF 0.85 | no |
+| pre-market-extreme stop | 52.1%, +0.31%, PF 1.30 | 44.4%, -0.08%, PF 0.94 | no |
+| confirmation by 09:40 | 49.5%, +0.28%, PF 1.24 | 43.1%, +0.08%, PF 1.06 | neutral |
+| sector ETF confirmation | 48.0%, +0.09%, PF 1.08 | 39.1%, -0.31%, PF 0.76 | no (slightly worse) |
+
+### Conclusion
+
+H-GAP-WR is NOT QUALIFIED. On 39 sessions of data the gap-and-go win
+rate cannot be raised by exit or stop design without destroying
+expectancy out of sample. The one robust lever is gap magnitude: the
+10%+ bucket is the only slice positive in both windows (n=57 and n=17,
+so still thin). What is built from this: the scanner separates trade
+candidates (gap >= 10% with structure) from watch-only names (5 to 10%)
+and drops 3 to 5% gaps by default. The entry, stop and exit rules stay
+as registered (first 5-minute close beyond the pre-market extreme, stop
+through the 09:30 candle, +1 and +1.5 ATR, 15:45). Expect about 55 to
+63% win on the stock for the 10%+ bucket, lower for the option.
+
+Ways to improve that remain, none of them a parameter: more history
+(Schwab minute bars on the operator's machine may reach further back
+than Yahoo's 60 days; worth checking), pre-market volume as a filter
+(available live on Schwab, not in this test), catalyst quality (the news
+ledger and Jev, not backtestable here), and the forward log.
