@@ -25,10 +25,9 @@
 //
 // Read-only. Never places orders. Yahoo pre-market bars carry no volume.
 
-import "dotenv/config";
 import { createLogger, setLogLevel } from "../core/logger.js";
-import { SchwabAuth } from "../brokers/schwab/auth.js";
-import { SchwabRest } from "../brokers/schwab/rest.js";
+import type { SchwabRest } from "../brokers/schwab/rest.js";
+import { parseProvider, schwabSession, type ProviderChoice } from "./schwab-session.js";
 import { etParts } from "../utils/time.js";
 import { YahooHistoricalBars } from "../data/yahoo-historical.js";
 import { loadUniverse, statsFromDaily, type UniverseEntry } from "./universe.js";
@@ -53,7 +52,7 @@ interface Args {
   top: number;
   maxNames: number;
   chains: boolean;
-  provider: "auto" | "yahoo" | "schwab";
+  provider: ProviderChoice;
   minPmVolume: number;                 // Schwab only: pre-market shares traded
 }
 
@@ -66,7 +65,7 @@ function parseArgs(argv: readonly string[]): Args {
     else if (a === "--top") out.top = Number(argv[++i]);
     else if (a === "--max-names") out.maxNames = Number(argv[++i]);
     else if (a === "--no-chains") out.chains = false;
-    else if (a === "--provider") { const v = (argv[++i] ?? "").toLowerCase(); if (v === "yahoo" || v === "schwab" || v === "auto") out.provider = v; }
+    else if (a === "--provider") out.provider = parseProvider(argv[++i]);
     else if (a === "--min-pm-volume") out.minPmVolume = Number(argv[++i]);
   }
   return out;
@@ -133,8 +132,9 @@ async function main(): Promise<void> {
   }
 
   // Data source.
-  const schwab = await schwabRestIfAvailable(args.provider);
-  const providerName = schwab ? "schwab (real-time, batch quotes)" : "yahoo (5m bars, no pre-market volume)";
+  const session = await schwabSession(args.provider);
+  const schwab = session.rest;
+  const providerName = schwab ? "schwab (real-time, batch quotes)" : `yahoo (5m bars, no pre-market volume) because ${session.reason}`;
 
   const startedAt = Date.now();
   const rows: Candidate[] = [];
@@ -244,25 +244,6 @@ async function gapFor(yahoo: YahooHistoricalBars, symbol: string, today: string,
 }
 
 // ----- Schwab path -----
-
-// Returns a ready SchwabRest when the provider is requested or auto-detected
-// (credentials in the environment or .env, tokens on disk), else null.
-async function schwabRestIfAvailable(provider: Args["provider"]): Promise<SchwabRest | null> {
-  if (provider === "yahoo") return null;
-  const clientId = process.env.SCHWAB_CLIENT_ID ?? "";
-  const clientSecret = process.env.SCHWAB_CLIENT_SECRET ?? "";
-  if (!clientId || !clientSecret) {
-    if (provider === "schwab") throw new Error("--provider schwab needs SCHWAB_CLIENT_ID and SCHWAB_CLIENT_SECRET (environment or .env)");
-    return null;
-  }
-  const auth = new SchwabAuth({ clientId, clientSecret, redirectUri: process.env.SCHWAB_REDIRECT_URI ?? "https://localhost:8443/callback" });
-  const loaded = await auth.load();
-  if (!loaded) {
-    if (provider === "schwab") throw new Error("No Schwab tokens in data/oauth-tokens.json. Run npm run auth (browser login; refresh token lasts 7 days).");
-    return null;
-  }
-  return new SchwabRest(auth);
-}
 
 interface SchwabQuoteFields {
   readonly lastPrice?: number; readonly closePrice?: number; readonly totalVolume?: number; readonly tradeTime?: number;

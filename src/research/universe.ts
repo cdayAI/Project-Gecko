@@ -3,6 +3,7 @@
 //   npm run universe:build                       # full build (~20-40 min, resumable)
 //   npm run universe:build -- --limit 200        # smoke test
 //   npm run universe:build -- --min-dollar-volume 50000000 --min-price 5
+//   npm run universe:build -- --provider schwab   # Schwab price history (auto when tokens exist)
 //
 // Source: Nasdaq Trader symbol directories (nasdaqlisted.txt + otherlisted.txt),
 // filtered to plain common stock and ADR symbols (no ETFs, test issues,
@@ -22,6 +23,8 @@ import { fetchWithRetry } from "../utils/retry.js";
 import { etParts } from "../utils/time.js";
 import { YahooHistoricalBars } from "../data/yahoo-historical.js";
 import type { Bar } from "../core/types.js";
+import type { SchwabRest } from "../brokers/schwab/rest.js";
+import { parseProvider, schwabSession, type ProviderChoice } from "./schwab-session.js";
 
 const log = createLogger("universe");
 
@@ -157,15 +160,17 @@ interface BuildArgs {
   minPrice: number;
   minDollarVol: number;
   limit: number;
+  provider: ProviderChoice;
 }
 
 function parseArgs(argv: readonly string[]): BuildArgs {
-  const out: BuildArgs = { minPrice: 5, minDollarVol: 30_000_000, limit: 0 };
+  const out: BuildArgs = { minPrice: 5, minDollarVol: 30_000_000, limit: 0, provider: "auto" };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--min-price") out.minPrice = Number(argv[++i]);
     else if (a === "--min-dollar-volume") out.minDollarVol = Number(argv[++i]);
     else if (a === "--limit") out.limit = Number(argv[++i]);
+    else if (a === "--provider") out.provider = parseProvider(argv[++i]);
   }
   return out;
 }
@@ -174,8 +179,17 @@ async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   setLogLevel("warn");
   const listings = await fetchListings();
-  const work = args.limit > 0 ? listings.slice(0, args.limit) : listings;
+  let work = args.limit > 0 ? listings.slice(0, args.limit) : listings;
   const yahoo = new YahooHistoricalBars();
+  const session = await schwabSession(args.provider);
+  const schwab = session.rest;
+  process.stdout.write(`history source: ${schwab ? "schwab" : "yahoo"} (${session.reason})\n`);
+  if (schwab) {
+    // Batch-quote pre-screen on price, 100 symbols per request, before any history call.
+    const priced = await schwabPriceScreen(schwab, work.map((l) => l.symbol), args.minPrice);
+    work = work.filter((l) => priced.has(l.symbol));
+    process.stdout.write(`price pre-screen: ${work.length} of ${listings.length} at or above ${args.minPrice}\n`);
+  }
   const now = Date.now();
   const today = etParts(now).date;
   const entries: UniverseEntry[] = [];
@@ -186,7 +200,9 @@ async function main(): Promise<void> {
   for (let i = 0; i < work.length; i++) {
     const l = work[i];
     try {
-      const daily = await yahoo.fetch({ symbol: l.symbol, interval: "1d", startMs: now - 400 * 86_400_000, endMs: now, includePrePost: false });
+      const daily = schwab
+        ? await schwabDaily(schwab, l.symbol)
+        : await yahoo.fetch({ symbol: l.symbol, interval: "1d", startMs: now - 400 * 86_400_000, endMs: now, includePrePost: false });
       const s = statsFromDaily(l.symbol, daily, today);
       if (s && s.lastClose >= args.minPrice && s.avgDollarVol20 >= args.minDollarVol) {
         entries.push({ ...s, name: l.name, exchange: l.exchange });
@@ -207,6 +223,37 @@ async function main(): Promise<void> {
   fs.mkdirSync(path.dirname(UNIVERSE_FILE), { recursive: true });
   fs.writeFileSync(UNIVERSE_FILE, JSON.stringify(file));
   process.stdout.write(`\nUniverse written: ${UNIVERSE_FILE}  entries ${entries.length} of ${work.length} candidates (price >= $${args.minPrice}, avg $ volume >= $${(args.minDollarVol / 1e6).toFixed(0)}M)\n`);
+}
+
+// Symbols whose last price clears the floor, from batch quotes.
+async function schwabPriceScreen(rest: SchwabRest, symbols: readonly string[], minPrice: number): Promise<Set<string>> {
+  const keep = new Set<string>();
+  for (let i = 0; i < symbols.length; i += 100) {
+    const chunk = symbols.slice(i, i + 100);
+    try {
+      const batch = await rest.getQuotes(chunk);
+      for (const [sym, q] of Object.entries(batch)) {
+        const last = (q as { quote?: { lastPrice?: number } }).quote?.lastPrice ?? 0;
+        if (last >= minPrice) keep.add(sym.toUpperCase());
+      }
+    } catch (err) {
+      log.warn("Schwab quote batch failed; keeping chunk unscreened", { count: chunk.length, error: errMsg(err) });
+      for (const sym of chunk) keep.add(sym);
+    }
+    await sleep(550);   // Schwab allows ~120 requests per minute
+  }
+  return keep;
+}
+
+// One year of daily bars from Schwab price history, spaced for the rate limit.
+async function schwabDaily(rest: SchwabRest, symbol: string): Promise<readonly Bar[]> {
+  await sleep(550);
+  const h = await rest.getPriceHistory({ symbol, periodType: "year", period: 1, frequencyType: "daily", frequency: 1, needExtendedHoursData: false });
+  return h.candles.map((c) => ({ symbol, timestamp: c.datetime, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume }));
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
 }
 
 function errMsg(err: unknown): string {
