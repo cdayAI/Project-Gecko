@@ -1,18 +1,5 @@
 [
   {
-    "id": "T2",
-    "label": "gap >= 3%, above the 20-day high, sector green (the AMD specification)",
-    "n": 15,
-    "win": 60,
-    "exp": 1.1957569216219186,
-    "pf": 2.464235321176676,
-    "selExp": 0.3624322558396175,
-    "valExp": 1.924916004181433,
-    "verdict": "NOT QUALIFIED (n < 30)",
-    "date": "2026-09-22",
-    "source": "yahoo"
-  },
-  {
     "id": "T1",
     "label": "long, all",
     "n": 88,
@@ -100,6 +87,84 @@
     "selExp": -0.2587513149250137,
     "valExp": 1.705984883612162,
     "verdict": "for the record",
+    "date": "2026-09-22",
+    "source": "yahoo"
+  },
+  {
+    "id": "T6",
+    "label": "short fade, gap up 5-10%",
+    "n": 45,
+    "win": 46.666666666666664,
+    "exp": -0.1932251287620637,
+    "pf": 0.8238165983246011,
+    "selExp": -0.5216641129253091,
+    "valExp": 0.12093389956799709,
+    "verdict": "NOT QUALIFIED",
+    "date": "2026-09-22",
+    "source": "yahoo"
+  },
+  {
+    "id": "T2",
+    "label": "gap >= 3%, above the 20-day high, sector green (the AMD specification)",
+    "n": 15,
+    "win": 60,
+    "exp": 1.1957569216219186,
+    "pf": 2.464235321176676,
+    "selExp": 0.3624322558396175,
+    "valExp": 1.924916004181433,
+    "verdict": "NOT QUALIFIED (n < 30)",
+    "date": "2026-09-22",
+    "source": "yahoo"
+  },
+  {
+    "id": "T7",
+    "label": "hold to 15:45 on the AMD specification (gap >= 3%)",
+    "n": 15,
+    "win": 60,
+    "exp": 2.709399250190744,
+    "pf": 4.317729556537127,
+    "selExp": 3.3297374569071807,
+    "valExp": 2.1666033193138627,
+    "verdict": "PASS",
+    "date": "2026-09-22",
+    "source": "yahoo"
+  },
+  {
+    "id": "T7",
+    "label": "half at 1 ATR, rest to 15:45 on the AMD specification (gap >= 3%)",
+    "n": 15,
+    "win": 60,
+    "exp": 1.8739416076907112,
+    "pf": 3.294690034561158,
+    "selExp": 1.7426876091715007,
+    "valExp": 1.9887888563950211,
+    "verdict": "PASS",
+    "date": "2026-09-22",
+    "source": "yahoo"
+  },
+  {
+    "id": "T7",
+    "label": "hold to 15:45 on any mega-cap gap >= 3%",
+    "n": 78,
+    "win": 55.12820512820513,
+    "exp": 1.038018889261526,
+    "pf": 2.130284539000851,
+    "selExp": 1.0039492916056219,
+    "valExp": 1.0604903260132932,
+    "verdict": "PASS",
+    "date": "2026-09-22",
+    "source": "yahoo"
+  },
+  {
+    "id": "T7",
+    "label": "half at 1 ATR, rest to 15:45 on any mega-cap gap >= 3%",
+    "n": 78,
+    "win": 55.12820512820513,
+    "exp": 0.856378428586523,
+    "pf": 1.9324987313610618,
+    "selExp": 0.5658844622829307,
+    "valExp": 1.0479808318931478,
+    "verdict": "NOT QUALIFIED",
     "date": "2026-09-22",
     "source": "yahoo"
   }

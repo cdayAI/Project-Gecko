@@ -157,7 +157,19 @@ shorts (T5 observation) are the same shape.
 Metric: headline line "short fade, gap up 5-10%"; the 3-5% and 10%+
 fades and the long mirror are descriptive.
 
-Result: pending.
+Result (2026-09-22, Yahoo, 60 days, 1,500 names, 10 bps): NOT QUALIFIED.
+The fade rarely fires: of 235 gap-ups of 5-10%, 45 closed a 5-minute
+candle below the pre-market low by 11:30; those shorts ran n=45, 46.7%
+win, -0.19%/trade, PF 0.82, selection -0.52% and validation +0.12%, with
+76% of exits at the time stop. The 3-5% fade (n=240) was negative with
+the halves split (+0.14% / -0.43%). Buying gap-downs that reclaim their
+pre-market high is the worst line measured so far: 5-10% n=31, 25.8% win,
+-1.79%, PF 0.19; 3-5% n=101, 27.7% win, -1.06%, PF 0.24; both halves
+negative on both. A gap-down that pops back above its pre-market range
+keeps falling. Observation only: nine 10%+ gap-ups that failed were
+88.9% winners short (+2.70%, PF 11); nine trades say nothing yet. Fading
+mid-size gaps is retired; the tag legend on the night list prints this.
+File: docs/results/theory-t6-2026-09-22-yahoo.txt.
 
 ## T7 Catalyst exits (registered 2026-09-22 15:25 UTC, before running)
 
