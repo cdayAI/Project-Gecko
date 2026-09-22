@@ -50,6 +50,8 @@ ENPH FSLR PLUG OKLO SMR NNE VST RKLB ASTS LUNR ACHR JOBY SPCX MARA RIOT CLSK IRE
 IONQ RGTI QBTS QUBT SOUN BBAI AI U RBLX SNAP PINS DKNG RIVN LCID NIO XPEV LI F GM BABA JD PDD BIDU BILI GME AMC`.split(/\s+/).filter(Boolean);
 
 const TAPE = ["SPY", "QQQ", "IWM", "SMH", "XBI", "XLF", "XLE", "XLK", "XLV", "XLI", "XLY"] as const;
+const MEGA_DOLLAR_VOL = 1e9;   // 20-day average dollar volume: the T2 population (docs/theories.md)
+const MEGA_MIN_GAP = 2;        // pre-market gap up, percent
 const USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15";
 
 interface Args {
@@ -103,6 +105,8 @@ interface Candidate {
   readonly sector: string;
   readonly sectorGapPct: number | null;     // sector ETF pre-market gap
   readonly spec: boolean;                   // H-GAP-SECTOR-LONG: gap >= 10%, above 20d high, long, sector ETF green
+  readonly mega: boolean;                   // 20-day dollar volume >= $1B and gap up >= 2% (T2 population, docs/theories.md)
+  readonly megaSpec: boolean;               // T2 AMD specification: mega, gap >= 3%, above 20d high, sector ETF green
   readonly score: number;
   contract?: ContractPick | null;    // filled for finalists; null = no listed options found
 }
@@ -172,7 +176,8 @@ async function main(): Promise<void> {
         if (!s) continue;
         stats = pickStats(s);
       }
-      if (Math.abs(g.gapPct) < args.minGapPct) continue;
+      const mega = stats.avgDollarVol20 >= MEGA_DOLLAR_VOL && g.gapPct >= MEGA_MIN_GAP;
+      if (Math.abs(g.gapPct) < args.minGapPct && !mega) continue;
       const aboveHigh20 = g.premarketLast > stats.high20;
       const above52w = g.premarketLast > stats.high252;
       const belowLow20 = g.premarketLast < stats.low20;
@@ -180,7 +185,8 @@ async function main(): Promise<void> {
       const sector = sectorFor(symbol);
       const sectorGapPct = gaps.get(sector)?.gapPct ?? null;
       const spec = g.gapPct >= 10 && aboveHigh20 && sectorGapPct !== null && sectorGapPct > 0;
-      rows.push({ symbol, ...g, stats, aboveHigh20, above52w, belowLow20, sector, sectorGapPct, spec, score: Math.abs(g.gapPct) + structure + (spec ? 5 : 0) });
+      const megaSpec = mega && g.gapPct >= 3 && aboveHigh20 && sectorGapPct !== null && sectorGapPct > 0;
+      rows.push({ symbol, ...g, stats, aboveHigh20, above52w, belowLow20, sector, sectorGapPct, spec, mega, megaSpec, score: Math.abs(g.gapPct) + structure + (spec ? 5 : 0) });
     } catch {
       failed++;
     }
@@ -189,13 +195,17 @@ async function main(): Promise<void> {
 
   // Tiers from the registered tests: only 10%+ gaps held out of sample.
   const TRADE_GAP = 10;
+  const megaCount = rows.filter((r) => r.mega).length;
+  if (megaCount > 0) process.stdout.write(`  ${megaCount} mega-cap gap-ups of ${MEGA_MIN_GAP}%+ (${rows.filter((r) => r.megaSpec).length} meet the T2 specification)\n`);
   const tier = (list: Candidate[]): Candidate[] => [...list.filter((r) => Math.abs(r.gapPct) >= TRADE_GAP), ...list.filter((r) => Math.abs(r.gapPct) < TRADE_GAP)];
-  const ups = tier(rows.filter((r) => r.gapPct > 0).sort((a, b) => b.score - a.score)).slice(0, args.top);
+  // Mega-caps below the ordinary gap floor get their own table (T2); above it they sit in the ordinary tables.
+  const megaUps = rows.filter((r) => r.mega && r.gapPct < args.minGapPct).sort((a, b) => Number(b.megaSpec) - Number(a.megaSpec) || b.gapPct - a.gapPct).slice(0, args.top);
+  const ups = tier(rows.filter((r) => r.gapPct > 0 && !(r.mega && r.gapPct < args.minGapPct)).sort((a, b) => b.score - a.score)).slice(0, args.top);
   const downs = tier(rows.filter((r) => r.gapPct < 0).sort((a, b) => b.score - a.score)).slice(0, args.top);
 
   // Finalists: Schwab quotes carry no pre-market high/low, so fill those from
   // extended-hours minute bars; then name the contract.
-  for (const list of [ups, downs]) {
+  for (const list of [ups, downs, megaUps]) {
     for (let i = 0; i < list.length; i++) {
       const r = list[i];
       if (schwab) {
@@ -203,7 +213,7 @@ async function main(): Promise<void> {
         if (range) list[i] = { ...r, premarketHigh: range.high, premarketLow: range.low };
       }
       if (args.chains) {
-        const right = list === ups ? "C" : "P";
+        const right = list === downs ? "P" : "C";
         const otmPct = Math.min(2.5, 0.6 * (r.stats.atr14 / r.premarketLast) * 100);
         list[i].contract = schwab ? await pickSchwabContract(schwab, r.symbol, r.premarketLast, right, otmPct, now) : await pickCboeContract(r.symbol, r.premarketLast, right, otmPct, now);
       }
@@ -222,6 +232,7 @@ async function main(): Promise<void> {
   process.stdout.write(`Scanned ${names.length}: ${rows.length} gaps >= ${args.minGapPct}%, ${noPrints} without pre-market prints${schwab ? `, ${thin} below ${args.minPmVolume.toLocaleString()} pre-market shares` : ""}, ${failed} failed, ${((Date.now() - startedAt) / 60_000).toFixed(1)} min\n`);
   printTable(`GAP UP: LARGE (gap >= ${TRADE_GAP}%; forward test only, small size)`, ups.filter((r) => r.gapPct >= TRADE_GAP));
   printTable("GAP UP: WATCH (5-10%; no edge in the tests)", ups.filter((r) => r.gapPct < TRADE_GAP));
+  printTable(`GAP UP: MEGA-CAP (${MEGA_MIN_GAP}-${args.minGapPct}% gaps in names trading $${(MEGA_DOLLAR_VOL / 1e9).toFixed(0)}B a day; T2 in docs/theories.md, store validation pending; paper until then)`, megaUps);
   printTable(`GAP DOWN: LARGE (gap <= -${TRADE_GAP}%; forward test only)`, downs.filter((r) => r.gapPct <= -TRADE_GAP));
   printTable("GAP DOWN: WATCH (-5 to -10%)", downs.filter((r) => r.gapPct > -TRADE_GAP));
   process.stdout.write(`\nEntry rule (H-GAP-GO as registered; see docs/gap-and-go-registration-2026-09-21.md): no pre-market orders. Enter on the first 5-minute candle that CLOSES beyond the pre-market extreme (earliest 09:35). Stop: 5-minute close back through the 09:30 candle's opposite extreme. Targets: 1 ATR (half), 1.5 ATR (rest). Time exit 15:45. Skip if the open is more than 1.5% beyond the pre-market extreme. Status after the six-month Schwab-history test (docs/gap-and-go-registration-2026-09-21.md): the family is NOT a qualified edge (base rule PF 0.73 / 0.78 in both halves). Rows marked * meet the one specification that was positive in both halves of 123 sessions (H-GAP-SECTOR-LONG: gap >= 10%, above the 20-day high, LONG, sector ETF up pre-market): 55% win, about +0.4%/trade on the stock, PF 1.3, roughly one a day, and possibly chance (one survivor of 480 variants). Forward test those at small size and log every fill; treat unmarked rows as watch only. Tighter targets, time exits, wider stops did not survive; do not improvise them.\n`);
@@ -391,7 +402,9 @@ function historicalBucket(r: Candidate): string {
   const g = Math.abs(r.gapPct);
   // Six-month store test (123 sessions, 10 bps): selection Mar-Jun / validation Jun-Sep.
   const base = g >= 10 ? "gap10%+: 45% win -0.28% (Mar-Jun) / 54% win +0.55% (Jun-Sep), n=314" : g >= 5 ? "gap5-10%: ~42-46% win, about -0.2% (no edge)" : "gap3-5%: ~38-41% win, -0.3% (lost)";
-  return base + (r.gapPct > 0 && r.above52w ? "; 52w structure: 43%/-0.33% then 50%/+0.28%" : "");
+  // T2 (Yahoo, 60 days, 101 mega-caps): any 2%+ gap 52% win +0.58% both halves; the AMD specification 60% win +1.20% n=15; holding to 15:45 beat the targets (T7). Store validation pending.
+  const mega = r.megaSpec ? "; MEGA T2 spec (gap>=3%, >20d high, sector green): 60% win +1.20% n=15 on 60 days, hold-to-15:45 beat targets (T7); store run pending" : r.mega ? "; MEGA (T2 population): 52% win +0.58% n=158 on 60 days; store run pending" : "";
+  return base + (r.gapPct > 0 && r.above52w ? "; 52w structure: 43%/-0.33% then 50%/+0.28%" : "") + mega;
 }
 
 function printTable(title: string, rows: readonly Candidate[]): void {

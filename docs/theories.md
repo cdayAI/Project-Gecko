@@ -185,7 +185,32 @@ if its expectancy is higher than the registered exit's in both date
 halves and its PF is at least 1.3. Printed inside the T2 and T3 output
 (`--id T7` runs both).
 
-Result: pending.
+Result on the T2 populations (2026-09-22, Yahoo, 60 days): "hold to
+15:45" beats the registered exit on the AMD specification (n=15: +2.71%
+per trade, PF 4.32, halves +3.33% / +2.17% against +0.36% / +1.92%) and
+on any mega-cap gap of 3%+ (n=78: +1.04%, PF 2.13, halves +1.00% /
++1.06% against +0.25% / +1.05%; the validation half is a tie). "Half at
+1 ATR, rest to 15:45" beats it on the AMD specification (+1.87%, PF
+3.29) but not on the broader line. Read: on mega-caps the 1.5 ATR target
+sells the move early. Not applied to the registered rule until the store
+run agrees. T3 population: pending.
+
+## T8 Mega-cap gap, plain rule and the hold exit (registered 2026-09-22 15:40 UTC, after the T2 rerun)
+
+Statement: in names with 20-day dollar volume of $1B or more, every
+pre-market gap up of 2% or more, with no structure or sector filter,
+is positive under the registered rule, and more so held to 15:45. Found
+post hoc in the T2 rerun on the Yahoo window (n=158, 52.5% win,
++0.58%/trade, PF 1.64, halves +0.52% / +0.62%; held to 15:45 n=158,
++0.88%, PF 1.80 by the same run's variant lines), so that window cannot
+count.
+
+Validation: the store, sessions on or before 2026-07-24 only:
+`npm run theory -- --id T2 --source store --end-date 2026-07-24`, read
+"gap >= 2%, any structure" and its T7 variant lines. Pass criteria as
+above on that window alone.
+
+Result: pending the store run.
 
 ## Operator store runs (149 sessions of Schwab bars, on the operator's machine)
 
@@ -195,6 +220,7 @@ npm run theory -- --id T3 --source store
 npm run theory -- --id T4 --source store --end-date 2026-07-24
 npm run theory -- --id T1 --source store
 npm run theory -- --id T6 --source store
+npm run theory -- --id T2 --source store --end-date 2026-07-24
 ```
 
 Results land in docs/results/ and the evening push carries them. T4 with
