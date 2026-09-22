@@ -1,0 +1,34 @@
+Theory tests 2026-09-22: source yahoo, window 59 days (Yahoo) or the store, slippage 10 bps/side, universe 1734 names (built 2026-09-21)
+Rule: first 5-minute close beyond the pre-market extreme (09:30 candle included) confirms; entry at the next candle's open; no signal after 11:30; skip if the open is 1.5% beyond the extreme; stop on a 5-minute close through the 09:30 candle's opposite extreme; half at 1 ATR, rest at 1.5 ATR; time exit 15:45. Pass: n >= 30, exp > 0, PF >= 1.3, both date halves positive.
+
+===== T4 After-hours mover follow-through: after-hours last 3%+ from the close; next session the gap rule in that direction (1500 names) =====
+  357 after-hours moves of 3%+ with next-day pre-market prints; gap kept the sign 78% of the time; median gap in the after-hours direction 2.53%
+  long (after-hours up), all: n=73  win 41.1%  exp -0.55%  PF 0.62  net at $1k/trade -$405
+    selection (<= 2026-09-02): n=41  win 43.9%  exp -0.28%  PF 0.80  net at $1k/trade -$115
+    validation (> 2026-09-02): n=32  win 37.5%  exp -0.91%  PF 0.41  net at $1k/trade -$290
+    verdict: NOT QUALIFIED
+    exit mix: time 54%, stop 36%, target1 5%, target2 1%, eod 4%
+  long, after-hours +3-5%: n=51  win 41.2%  exp -0.52%  PF 0.61  net at $1k/trade -$267
+    selection (<= 2026-09-02): n=29  win 44.8%  exp -0.29%  PF 0.76  net at $1k/trade -$84
+    validation (> 2026-09-02): n=22  win 36.4%  exp -0.83%  PF 0.44  net at $1k/trade -$183
+    descriptive line, no verdict; would read: NOT QUALIFIED
+    exit mix: time 56%, target1 5%, stop 35%, eod 4%
+  long, after-hours +5-10%: n=16  win 37.5%  exp -0.81%  PF 0.49  net at $1k/trade -$130
+  long, after-hours +10+%: n=6  win 50.0%  exp -0.14%  PF 0.93  net at $1k/trade -$8
+  long, gap still up at 09:25: n=62  win 40.3%  exp -0.50%  PF 0.65  net at $1k/trade -$312
+    selection (<= 2026-09-02): n=36  win 44.4%  exp -0.03%  PF 0.97  net at $1k/trade -$12
+    validation (> 2026-09-02): n=26  win 34.6%  exp -1.15%  PF 0.33  net at $1k/trade -$299
+    descriptive line, no verdict; would read: NOT QUALIFIED
+    exit mix: time 52%, stop 37%, target1 6%, target2 1%, eod 3%
+  short (after-hours down), all: n=53  win 52.8%  exp +0.51%  PF 1.50  net at $1k/trade +$271
+    selection (<= 2026-09-02): n=19  win 52.6%  exp +1.16%  PF 2.64  net at $1k/trade +$220
+    validation (> 2026-09-02): n=34  win 52.9%  exp +0.15%  PF 1.13  net at $1k/trade +$52
+    verdict: PASS (n >= 30, exp > 0, PF >= 1.3, both halves positive)
+    exit mix: target1 10%, time 58%, stop 30%, target2 2%
+  short, gap still down at 09:25: n=44  win 54.5%  exp +0.77%  PF 1.75  net at $1k/trade +$340
+    selection (<= 2026-09-02): n=17  win 47.1%  exp +1.26%  PF 2.60  net at $1k/trade +$214
+    validation (> 2026-09-02): n=27  win 59.3%  exp +0.47%  PF 1.40  net at $1k/trade +$126
+    descriptive line, no verdict; would read: PASS (n >= 30, exp > 0, PF >= 1.3, both halves positive)
+    exit mix: target1 13%, time 56%, stop 30%, target2 2%
+
+8.5 min

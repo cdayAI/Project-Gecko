@@ -93,4 +93,31 @@ in that direction on the next session is positive. This is the tier-1
 Metric: headline line "long (after-hours up), all"; the share of moves
 whose gap kept the sign is descriptive; shorts reported for the record.
 
-Result: pending.
+Result (2026-09-22, Yahoo, 60 days, 1,500 names, 10 bps): NOT QUALIFIED.
+357 after-hours moves of 3%+; the gap kept the sign 78% of the time
+(median gap in the after-hours direction +2.53%), so the move does hold
+into the open. Buying it does not pay: long n=73, 41.1% win, -0.55%/trade,
+PF 0.62, both halves negative; 54% time exits, 36% stops. Buckets 3-5%,
+5-10% and 10%+ all negative; requiring the gap to still be up at 09:25
+does not help (n=62, PF 0.65). Observation retained, not a result: the
+short side after an after-hours drop was positive (n=53, 52.8% win,
++0.51%, PF 1.50, both halves positive; with the gap still down at 09:25
+n=44, +0.77%, PF 1.75). It was not the declared headline, so it is
+registered below as T5 and must be validated on sessions this window
+never saw. File: docs/results/theory-t4-2026-09-22-yahoo.txt.
+
+## T5 After-hours drop, short the next session (registered 2026-09-22 15:00 UTC, after the T4 observation)
+
+Statement: after an after-hours drop of 3% or more from the close, the
+gap rule short on the next session (first 5-minute close below the
+pre-market low, entry at the next open, stop on a close through the
+09:30 high, half at 1 ATR, rest at 1.5 ATR, out by 15:45) is positive.
+Found post hoc in the T4 Yahoo window (2026-07-25 to 2026-09-22), so
+that window cannot count.
+
+Validation: the store, sessions on or before 2026-07-24 only:
+`npm run theory -- --id T4 --source store --end-date 2026-07-24`, read
+the line "short (after-hours down), all". Pass criteria as above on that
+window alone.
+
+Result: pending the store run.

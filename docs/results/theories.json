@@ -37,5 +37,31 @@
     "verdict": "NOT QUALIFIED",
     "date": "2026-09-22",
     "source": "yahoo"
+  },
+  {
+    "id": "T4",
+    "label": "long (after-hours up), all",
+    "n": 73,
+    "win": 41.0958904109589,
+    "exp": -0.554909157078332,
+    "pf": 0.6160938214672704,
+    "selExp": -0.28043152532413024,
+    "valExp": -0.906583622763403,
+    "verdict": "NOT QUALIFIED",
+    "date": "2026-09-22",
+    "source": "yahoo"
+  },
+  {
+    "id": "T4",
+    "label": "short (after-hours down), all",
+    "n": 53,
+    "win": 52.83018867924528,
+    "exp": 0.5122038424914926,
+    "pf": 1.5028109091116564,
+    "selExp": 1.1561446339824732,
+    "valExp": 0.15235457665829738,
+    "verdict": "PASS",
+    "date": "2026-09-22",
+    "source": "yahoo"
   }
 ]

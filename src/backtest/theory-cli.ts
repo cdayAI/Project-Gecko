@@ -25,7 +25,7 @@ import { SECTOR_ETFS, sectorFor } from "../research/sectors.js";
 import { fetchEarnings } from "../research/earnings-calendar.js";
 import { averageTrueRange, minutesEt, simulate, OPEN_CHASE_PCT, OPEN_MIN, type GapGoTrade } from "./gap-replay.js";
 
-interface Args { id: string; source: "yahoo" | "store" | "auto"; days: number; maxNames: number; slipBps: number; out: string; minDollarVol: number }
+interface Args { id: string; source: "yahoo" | "store" | "auto"; days: number; maxNames: number; slipBps: number; out: string; minDollarVol: number; startDate: string | null; endDate: string | null }
 interface Day { readonly date: string; readonly open: number; readonly high: number; readonly low: number; readonly close: number }
 interface Session { readonly date: string; readonly pre: readonly Bar[]; readonly rth: readonly Bar[]; readonly ah: readonly Bar[] }
 interface Stat { readonly n: number; readonly win: number; readonly exp: number; readonly pf: number; readonly net: number }
@@ -34,7 +34,7 @@ const CLOSE_MIN = 16 * 60;
 const MIN_HISTORY = 15;   // prior sessions needed for the 20-day level and ATR
 
 function parseArgs(argv: readonly string[]): Args {
-  const out: Args = { id: "all", source: "auto", days: 59, maxNames: 1500, slipBps: 10, out: path.join("docs", "results"), minDollarVol: 1e9 };
+  const out: Args = { id: "all", source: "auto", days: 59, maxNames: 1500, slipBps: 10, out: path.join("docs", "results"), minDollarVol: 1e9, startDate: null, endDate: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--id") out.id = (argv[++i] ?? "all").toUpperCase();
@@ -44,6 +44,8 @@ function parseArgs(argv: readonly string[]): Args {
     else if (a === "--slippage-bps") out.slipBps = Number(argv[++i]) || 0;
     else if (a === "--out") out.out = argv[++i] ?? out.out;
     else if (a === "--min-dollar-vol") out.minDollarVol = Number(argv[++i]) || 1e9;
+    else if (a === "--start-date") out.startDate = argv[++i] ?? null;   // sessions on or after (YYYY-MM-DD)
+    else if (a === "--end-date") out.endDate = argv[++i] ?? null;       // sessions on or before; use to keep a store run out of sample
   }
   return out;
 }
@@ -59,6 +61,7 @@ class Ctx {
   readonly slip: number;
   constructor(readonly args: Args, readonly entries: readonly UniverseEntry[]) { this.slip = args.slipBps / 10_000; }
   say(s: string): void { this.lines.push(s); process.stdout.write(s + "\n"); }
+  inRange(date: string): boolean { return (this.args.startDate === null || date >= this.args.startDate) && (this.args.endDate === null || date <= this.args.endDate); }
 
   // Full intraday history for a symbol: the store when present and allowed, else Yahoo (about 60 days).
   async intraday(symbol: string, cache: boolean): Promise<readonly Bar[] | null> {
@@ -206,7 +209,7 @@ async function theoryT1(ctx: Ctx): Promise<void> {
     if (scanned % 300 === 0) process.stdout.write(`  ${scanned}/${names.length} daily histories\n`);
     for (let i = MIN_HISTORY; i < days.length - 1; i++) {
       const d = days[i]; const prev = days[i - 1];
-      if (d.date < windowStart || !(prev.close > 0) || !(d.high > d.low)) continue;
+      if (d.date < windowStart || !ctx.inRange(days[i + 1].date) || !(prev.close > 0) || !(d.high > d.low)) continue;
       const ret = (d.close / prev.close - 1) * 100;
       const pos = (d.close - d.low) / (d.high - d.low);
       const atr = atrOf(days, i);
@@ -262,7 +265,7 @@ async function theoryT2(ctx: Ctx): Promise<void> {
     const days = dailyFromSessions(sessions);
     for (let i = MIN_HISTORY; i < sessions.length; i++) {
       const s = sessions[i];
-      if (s.pre.length === 0) continue;
+      if (s.pre.length === 0 || !ctx.inRange(s.date)) continue;
       const prior = days[i - 1].close;
       const pmLast = s.pre[s.pre.length - 1].close;
       const gap = (pmLast / prior - 1) * 100;
@@ -287,7 +290,7 @@ async function theoryT3(ctx: Ctx): Promise<void> {
   ctx.say(`\n===== T3 Earnings gap-and-go: names on the Nasdaq calendar that gap 5%+ on the report session (report date, else the next session); the gap rule in the gap's direction =====`);
   const spy = await ctx.intraday("SPY", true);
   if (!spy) { ctx.say("  no SPY bars; cannot enumerate sessions"); return; }
-  const sessions = sessionsOf(spy).map((s) => s.date);
+  const sessions = sessionsOf(spy).map((s) => s.date).filter((d) => ctx.inRange(d));
   const universe = new Set(ctx.entries.slice(0, ctx.args.maxNames).map((e) => e.symbol));
   const trades: (GapGoTrade & { bucket: string })[] = [];
   let reporters = 0; let withGap = 0; let noBars = 0;
@@ -353,7 +356,7 @@ async function theoryT4(ctx: Ctx): Promise<void> {
       const ah = (ahLast / close - 1) * 100;
       if (Math.abs(ah) < 3) continue;
       const next = sessions[i + 1];
-      if (next.pre.length === 0) continue;
+      if (next.pre.length === 0 || !ctx.inRange(next.date)) continue;
       events++;
       const gap = (next.pre[next.pre.length - 1].close / close - 1) * 100;
       const same = Math.sign(gap) === Math.sign(ah);
@@ -381,7 +384,7 @@ async function main(): Promise<void> {
   const ctx = new Ctx(args, uni.entries);
   const today = etParts(ctx.now).date;
   const ids = args.id === "ALL" ? ["T1", "T2", "T3", "T4"] : [args.id];
-  ctx.say(`Theory tests ${today}: source ${args.source}, window ${args.days} days (Yahoo) or the store, slippage ${args.slipBps} bps/side, universe ${uni.entries.length} names (built ${uni.builtAt.slice(0, 10)})`);
+  ctx.say(`Theory tests ${today}: source ${args.source}, window ${args.days} days (Yahoo) or the store${args.startDate || args.endDate ? `, sessions ${args.startDate ?? "start"} to ${args.endDate ?? "end"}` : ""}, slippage ${args.slipBps} bps/side, universe ${uni.entries.length} names (built ${uni.builtAt.slice(0, 10)})`);
   ctx.say(`Rule: first 5-minute close beyond the pre-market extreme (09:30 candle included) confirms; entry at the next candle's open; no signal after 11:30; skip if the open is ${OPEN_CHASE_PCT}% beyond the extreme; stop on a 5-minute close through the 09:30 candle's opposite extreme; half at 1 ATR, rest at 1.5 ATR; time exit 15:45. Pass: n >= 30, exp > 0, PF >= 1.3, both date halves positive.`);
   const started = Date.now();
   for (const id of ids) {
@@ -394,7 +397,7 @@ async function main(): Promise<void> {
   }
   ctx.say(`\n${((Date.now() - started) / 60_000).toFixed(1)} min`);
   fs.mkdirSync(args.out, { recursive: true });
-  const file = path.join(args.out, `theory-${ids.join("").toLowerCase()}-${today}-${args.source}.txt`);
+  const file = path.join(args.out, `theory-${ids.join("").toLowerCase()}-${today}-${args.source}${args.endDate ? `-to-${args.endDate}` : ""}${args.startDate ? `-from-${args.startDate}` : ""}.txt`);
   fs.writeFileSync(file, ctx.lines.join("\n") + "\n");
   process.stdout.write(`written: ${file}\n`);
   // Headline stats for the night list (docs/results/theories.json), merged by theory id.
