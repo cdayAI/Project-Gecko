@@ -81,7 +81,27 @@ half.
 Metric: headline lines "long, all earnings gaps" and "long, gap 10%+";
 shorts reported for the record.
 
-Result: pending.
+Result (2026-09-22, Yahoo, 41 sessions from 2026-07-25, 1,500 names,
+10 bps): "long, gap 10%+" PASS; "long, all earnings gaps" NOT QUALIFIED.
+1,213 reporters in the universe, 392 gapped 5%+ on the report session
+(354 reporters had no bars, mostly Yahoo refusals while two runs shared
+the connection; treat n as a floor). Long, all gaps 5%+: n=100, 56.0%
+win, +0.22%, PF 1.14, selection negative. Long, gap 10%+: n=44, 59.1%
+win, +0.64%/trade, PF 1.43, selection +0.16% (PF 1.10, n=32) and
+validation +1.92% (PF 2.62, n=12), both positive; exits target1 18%,
+target2 9%, time 45%, stop 27%. Against the no-catalyst reference for
+10%+ gaps (45% and 54% win, -0.28% and +0.55%), the earnings catalyst
+adds about 10 points of win rate. 5-10% earnings gaps lost on both sides,
+like every other 5-10% gap. Shorts: all n=83 not qualified; 10%+ n=35,
+51.4% win, +0.69%, PF 1.39, descriptive. The validation half holds 12
+trades, so the store run is required before this is more than a
+hypothesis. File: docs/results/theory-t3-2026-09-22-yahoo.txt.
+
+What it changes on the night list: an ER-tagged name that gaps 10% or
+more in the morning carries the only catalyst-specific positive base
+rate measured so far; it still needs the star conditions (above the
+20-day high, sector green) for the registered spec, and the two are
+logged separately so the log can tell them apart.
 
 ## T4 After-hours mover follow-through (registered 2026-09-22 15:20 UTC)
 
@@ -121,3 +141,16 @@ the line "short (after-hours down), all". Pass criteria as above on that
 window alone.
 
 Result: pending the store run.
+
+## Operator store runs (149 sessions of Schwab bars, on the operator's machine)
+
+```powershell
+npm run theory -- --id T2 --source store
+npm run theory -- --id T3 --source store
+npm run theory -- --id T4 --source store --end-date 2026-07-24
+npm run theory -- --id T1 --source store
+```
+
+Results land in docs/results/ and the evening push carries them. T4 with
+the end date is the T5 validation; the other three simply have more
+sessions than Yahoo can give.

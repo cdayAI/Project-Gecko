@@ -63,5 +63,44 @@
     "verdict": "PASS",
     "date": "2026-09-22",
     "source": "yahoo"
+  },
+  {
+    "id": "T3",
+    "label": "long, all earnings gaps",
+    "n": 100,
+    "win": 56.00000000000001,
+    "exp": 0.21527773264409114,
+    "pf": 1.1357178171724387,
+    "selExp": -0.14325449476742735,
+    "valExp": 1.137217745987995,
+    "verdict": "NOT QUALIFIED",
+    "date": "2026-09-22",
+    "source": "yahoo"
+  },
+  {
+    "id": "T3",
+    "label": "long, gap 10%+",
+    "n": 44,
+    "win": 59.09090909090909,
+    "exp": 0.6376696971123151,
+    "pf": 1.434453585078642,
+    "selExp": 0.1552247934904124,
+    "valExp": 1.9241894401040562,
+    "verdict": "PASS",
+    "date": "2026-09-22",
+    "source": "yahoo"
+  },
+  {
+    "id": "T3",
+    "label": "short, all earnings gaps",
+    "n": 83,
+    "win": 49.39759036144578,
+    "exp": 0.14366453296814286,
+    "pf": 1.0909645116192837,
+    "selExp": -0.2587513149250137,
+    "valExp": 1.705984883612162,
+    "verdict": "NOT QUALIFIED",
+    "date": "2026-09-22",
+    "source": "yahoo"
   }
 ]

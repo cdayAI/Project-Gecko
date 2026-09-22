@@ -1,0 +1,26 @@
+Theory tests 2026-09-22: source yahoo, window 59 days (Yahoo) or the store, slippage 10 bps/side, universe 1734 names (built 2026-09-21)
+Rule: first 5-minute close beyond the pre-market extreme (09:30 candle included) confirms; entry at the next candle's open; no signal after 11:30; skip if the open is 1.5% beyond the extreme; stop on a 5-minute close through the 09:30 candle's opposite extreme; half at 1 ATR, rest at 1.5 ATR; time exit 15:45. Pass: n >= 30, exp > 0, PF >= 1.3, both date halves positive.
+
+===== T3 Earnings gap-and-go: names on the Nasdaq calendar that gap 5%+ on the report session (report date, else the next session); the gap rule in the gap's direction =====
+  1213 reporters in the universe over 41 sessions; 392 gapped 5%+ (354 without bars)
+  long, all earnings gaps: n=100  win 56.0%  exp +0.22%  PF 1.14  net at $1k/trade +$215
+    selection (<= 2026-08-11): n=72  win 51.4%  exp -0.14%  PF 0.91  net at $1k/trade -$103
+    validation (> 2026-08-11): n=28  win 67.9%  exp +1.14%  PF 1.77  net at $1k/trade +$318
+    verdict: NOT QUALIFIED
+    exit mix: time 47%, stop 30%, target1 16%, target2 8%
+  long, gap 5-10%: n=56  win 53.6%  exp -0.12%  PF 0.93  net at $1k/trade -$65
+  long, gap 10%+: n=44  win 59.1%  exp +0.64%  PF 1.43  net at $1k/trade +$281
+    selection (<= 2026-08-07): n=32  win 53.1%  exp +0.16%  PF 1.10  net at $1k/trade +$50
+    validation (> 2026-08-07): n=12  win 75.0%  exp +1.92%  PF 2.62  net at $1k/trade +$231
+    verdict: PASS (n >= 30, exp > 0, PF >= 1.3, both halves positive)
+    exit mix: time 45%, stop 27%, target1 18%, target2 9%
+  short, all earnings gaps: n=83  win 49.4%  exp +0.14%  PF 1.09  net at $1k/trade +$119
+    selection (<= 2026-08-14): n=66  win 43.9%  exp -0.26%  PF 0.85  net at $1k/trade -$171
+    validation (> 2026-08-14): n=17  win 70.6%  exp +1.71%  PF 2.57  net at $1k/trade +$290
+    verdict: NOT QUALIFIED
+    exit mix: stop 28%, time 57%, target1 11%, target2 4%
+  short, gap 5-10%: n=48  win 47.9%  exp -0.25%  PF 0.82  net at $1k/trade -$122
+  short, gap 10%+: n=35  win 51.4%  exp +0.69%  PF 1.39  net at $1k/trade +$241
+  reference, no catalyst filter (store, 123 sessions): 5-10% gaps 42-46% win, about -0.2%/trade; 10%+ gaps 45% / 54% win by half
+
+33.2 min
