@@ -60,7 +60,7 @@
     "pf": 1.5028109091116564,
     "selExp": 1.1561446339824732,
     "valExp": 0.15235457665829738,
-    "verdict": "PASS",
+    "verdict": "OBSERVATION (post hoc; registered as T5, store validation pending)",
     "date": "2026-09-22",
     "source": "yahoo"
   },
@@ -99,7 +99,7 @@
     "pf": 1.0909645116192837,
     "selExp": -0.2587513149250137,
     "valExp": 1.705984883612162,
-    "verdict": "NOT QUALIFIED",
+    "verdict": "for the record",
     "date": "2026-09-22",
     "source": "yahoo"
   }

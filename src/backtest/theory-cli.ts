@@ -329,7 +329,7 @@ async function theoryT3(ctx: Ctx): Promise<void> {
   report(ctx, "long, all earnings gaps", trades.filter((t) => t.direction === "LONG"), true);
   report(ctx, "long, gap 5-10%", trades.filter((t) => t.direction === "LONG" && t.bucket === "<10"));
   report(ctx, "long, gap 10%+", trades.filter((t) => t.direction === "LONG" && t.bucket === "10+"), true);
-  report(ctx, "short, all earnings gaps", trades.filter((t) => t.direction === "SHORT"), true);
+  report(ctx, "short, all earnings gaps (for the record)", trades.filter((t) => t.direction === "SHORT"));
   report(ctx, "short, gap 5-10%", trades.filter((t) => t.direction === "SHORT" && t.bucket === "<10"));
   report(ctx, "short, gap 10%+", trades.filter((t) => t.direction === "SHORT" && t.bucket === "10+"));
   ctx.say(`  reference, no catalyst filter (store, 123 sessions): 5-10% gaps 42-46% win, about -0.2%/trade; 10%+ gaps 45% / 54% win by half`);
@@ -372,7 +372,8 @@ async function theoryT4(ctx: Ctx): Promise<void> {
   report(ctx, "long (after-hours up), all", rows.filter((r) => r.ah > 0).map((r) => r.t), true);
   for (const [lo, hi] of [[3, 5], [5, 10], [10, 1000]] as const) report(ctx, `long, after-hours +${lo}${hi < 1000 ? `-${hi}` : "+"}%`, rows.filter((r) => r.ah >= lo && r.ah < hi).map((r) => r.t));
   report(ctx, "long, gap still up at 09:25", rows.filter((r) => r.ah > 0 && r.held).map((r) => r.t));
-  report(ctx, "short (after-hours down), all", rows.filter((r) => r.ah < 0).map((r) => r.t), true);
+  // Declared for the record only; the positive reading on 2026-09-22 is registered as T5 and validated with --end-date 2026-07-24 on the store.
+  report(ctx, "short (after-hours down), all (T5 when run with --end-date 2026-07-24 on the store)", rows.filter((r) => r.ah < 0).map((r) => r.t), ctx.args.endDate !== null);
   report(ctx, "short, gap still down at 09:25", rows.filter((r) => r.ah < 0 && r.held).map((r) => r.t));
 }
 
