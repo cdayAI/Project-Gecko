@@ -60,6 +60,7 @@
     "backtest:swing": "node --import tsx src/backtest/swing-cli.ts",
     "scan:swing": "node --import tsx src/research/swing-scan.ts",
     "backtest:mr": "node --import tsx src/backtest/intraday-mr-cli.ts",
+    "theory": "node --import tsx src/backtest/theory-cli.ts",
     "history:pull": "node --import tsx src/data/history-pull.ts",
     "log": "node --import tsx src/research/trade-log.ts",
     "packet": "node --import tsx src/research/daily-packet.ts",

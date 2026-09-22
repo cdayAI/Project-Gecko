@@ -7,11 +7,13 @@
 //   npm run live -- --once                    # one snapshot and exit
 //   npm run live -- --symbols ONON,ECO --interval 20
 //
-// Rule per row (long for GAP UP, short for GAP DOWN): skip if the open is
-// more than 1.5% beyond the pre-market extreme; enter on the first 5-minute
-// candle from 09:35 that closes beyond the extreme; stop on a 5-minute close
-// back through the 09:30 candle's opposite extreme; half off at 1 ATR, rest
-// at 1.5 ATR; time exit 15:45. Every refresh rewrites
+// Rule per row (long for GAP UP, short for GAP DOWN), exactly as replayed in
+// src/backtest/gap-replay.ts: skip if the open is more than 1.5% beyond the
+// pre-market extreme; the first 5-minute candle (09:30 included) closing
+// beyond the extreme confirms and the entry is the next candle's open; no
+// new signal after 11:30; stop on a 5-minute close back through the 09:30
+// candle's opposite extreme; half off at 1 ATR, rest at 1.5 ATR; time exit
+// 15:45. Every refresh rewrites
 // docs/daily/<date>/live.txt so the closing packet carries the day's record.
 // Read-only; never places orders.
 
@@ -37,6 +39,7 @@ const YAHOO_TAPE = ["SPY", "QQQ", "IWM", "SMH", "XBI", "XLE"] as const;
 const OPEN_MIN = 9 * 60 + 30;
 const CLOSE_MIN = 16 * 60;
 const TIME_EXIT_MIN = 15 * 60 + 45;
+const LAST_SIGNAL_MIN = 11 * 60 + 30;   // as tested: no confirming candle closing after 11:30
 const SKIP_PCT = 1.5;
 
 function parseArgs(argv: readonly string[]): Args {
@@ -170,12 +173,16 @@ function evaluate(row: Row, candles: readonly Candle[], nowMin: number): Status 
   let exit: { price: number; t: number; reason: string } | null = null;
   const t1 = (e: number): number => (long ? e + row.atr : e - row.atr);
   const t2 = (e: number): number => (long ? e + 1.5 * row.atr : e - 1.5 * row.atr);
-  for (const c of done) {
-    if (c.t < OPEN_MIN + 5) continue;   // the 09:30 candle never triggers
+  for (let i = 0; i < done.length; i++) {
+    const c = done[i];
     if (!entry) {
+      if (c.t + 5 > LAST_SIGNAL_MIN) break;   // as tested: no new signal after 11:30
       if (long ? c.c > ext : c.c < ext) {
-        entry = { price: c.c, t: c.t + 5 };
-        events.push(`${hhmm(c.t + 5)} ENTRY ${row.side} ${c.c.toFixed(2)} (5m close ${long ? "above" : "below"} ${ext.toFixed(2)}); stop ${stopRef.toFixed(2)} on a 5m close; T1 ${t1(c.c).toFixed(2)} T2 ${t2(c.c).toFixed(2)}`);
+        // As tested: the 09:30 candle can confirm; entry at the next candle's open.
+        const next = candles.find((x) => x.t === c.t + 5);
+        const price = next ? next.o : c.c;
+        entry = { price, t: c.t + 5 };
+        events.push(`${hhmm(c.t + 5)} ENTRY ${row.side} ${price.toFixed(2)} (${hhmm(c.t)} candle closed ${c.c.toFixed(2)}, ${long ? "above" : "below"} ${ext.toFixed(2)}); stop ${stopRef.toFixed(2)} on a 5m close; T1 ${t1(price).toFixed(2)} T2 ${t2(price).toFixed(2)}`);
       }
       continue;
     }
@@ -247,7 +254,7 @@ async function snapshot(rest: SchwabRest | null, yahoo: YahooHistoricalBars, row
       lines.push(`${row.symbol}: ${err instanceof Error ? err.message : String(err)}`, "");
     }
   }
-  lines.push(`Rule: skip if the open is >${SKIP_PCT}% beyond the PM extreme; enter on the first 5m close beyond it from 09:35; stop on a 5m close through the 09:30 candle's opposite extreme; half at 1 ATR, rest at 1.5 ATR; time exit 15:45. Rows: ${rows.map((r) => `${r.symbol} (${r.source})`).join(", ")}.`);
+  lines.push(`Rule as tested: skip if the open is >${SKIP_PCT}% beyond the PM extreme; the first 5m candle (09:30 included) closing beyond it confirms, entry at the next candle's open, no new signal after 11:30; stop on a 5m close through the 09:30 candle's opposite extreme; half at 1 ATR, rest at 1.5 ATR; time exit 15:45. Rows: ${rows.map((r) => `${r.symbol} (${r.source})`).join(", ")}.`);
   const text = lines.join("\n") + "\n";
   try {
     const dir = path.join("docs", "daily", date);
