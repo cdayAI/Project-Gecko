@@ -23,7 +23,7 @@ import { etParts } from "../utils/time.js";
 import { loadUniverse, type UniverseEntry } from "../research/universe.js";
 import { SECTOR_ETFS, sectorFor } from "../research/sectors.js";
 import { fetchEarnings } from "../research/earnings-calendar.js";
-import { averageTrueRange, minutesEt, simulate, OPEN_CHASE_PCT, OPEN_MIN, type GapGoTrade } from "./gap-replay.js";
+import { averageTrueRange, minutesEt, simulate, OPEN_CHASE_PCT, OPEN_MIN, type ExitMode, type GapGoTrade } from "./gap-replay.js";
 
 interface Args { id: string; source: "yahoo" | "store" | "auto"; days: number; maxNames: number; slipBps: number; out: string; minDollarVol: number; startDate: string | null; endDate: string | null }
 interface Day { readonly date: string; readonly open: number; readonly high: number; readonly low: number; readonly close: number }
@@ -142,13 +142,32 @@ function low20(days: readonly Day[], upToIdx: number): number | null {
 }
 
 // The rule with the open-chase skip, in one direction.
-function replay(symbol: string, s: Session, direction: "LONG" | "SHORT", gapPct: number, atr: number, slip: number): GapGoTrade | null {
+function replay(symbol: string, s: Session, direction: "LONG" | "SHORT", gapPct: number, atr: number, slip: number, exitMode: ExitMode = "targets"): GapGoTrade | null {
   if (s.pre.length === 0 || s.rth.length < 3) return null;
   const pmHigh = Math.max(...s.pre.map((b) => b.high));
   const pmLow = Math.min(...s.pre.map((b) => b.low));
   const open = s.rth[0].open;
   if (direction === "LONG" ? open > pmHigh * (1 + OPEN_CHASE_PCT / 100) : open < pmLow * (1 - OPEN_CHASE_PCT / 100)) return null;
-  return simulate(symbol, s.date, direction, gapPct, false, s.rth, pmHigh, pmLow, atr, slip);
+  return simulate(symbol, s.date, direction, gapPct, false, s.rth, pmHigh, pmLow, atr, slip, exitMode);
+}
+
+// T7: the same trades under each exit; a variant passes when its expectancy
+// beats the registered exit in both date halves and its PF is >= 1.3.
+interface Variants { readonly t: GapGoTrade; readonly hold: GapGoTrade | null; readonly half: GapGoTrade | null }
+function reportVariants(ctx: Ctx, label: string, rows: readonly Variants[]): void {
+  if (rows.length < 4) return;
+  const base = rows.map((r) => r.t);
+  const dates = [...new Set(base.map((t) => t.date))].sort();
+  const split = dates[Math.floor(dates.length / 2) - 1];
+  const halves = (ts: readonly GapGoTrade[]): [Stat, Stat] => [stat(ts.filter((t) => t.date <= split)), stat(ts.filter((t) => t.date > split))];
+  const [bs, bv] = halves(base);
+  for (const [name, pick] of [["hold to 15:45", (r: Variants): GapGoTrade | null => r.hold], ["half at 1 ATR, rest to 15:45", (r: Variants): GapGoTrade | null => r.half]] as const) {
+    const ts = rows.map(pick).filter((t): t is GapGoTrade => t !== null);
+    const all = stat(ts); const [vs, vv] = halves(ts);
+    const beats = vs.exp > bs.exp && vv.exp > bv.exp && all.pf >= 1.3;
+    ctx.say(`    T7 exit variant "${name}" on ${label}: ${fmtStat(all)}; halves ${vs.exp >= 0 ? "+" : ""}${vs.exp.toFixed(2)}% / ${vv.exp >= 0 ? "+" : ""}${vv.exp.toFixed(2)}% against the registered exit ${bs.exp >= 0 ? "+" : ""}${bs.exp.toFixed(2)}% / ${bv.exp >= 0 ? "+" : ""}${bv.exp.toFixed(2)}%: ${beats ? "BEATS IT (both halves, PF >= 1.3)" : "does not beat it"}`);
+    ctx.headlines.push({ id: "T7", label: `${name} on ${label}`, n: all.n, win: all.win, exp: all.exp, pf: all.pf, selExp: vs.exp, valExp: vv.exp, verdict: beats ? "PASS" : "NOT QUALIFIED", date: etParts(ctx.now).date, source: ctx.args.source });
+  }
 }
 
 function stat(ts: readonly GapGoTrade[]): Stat {
@@ -254,7 +273,7 @@ async function theoryT2(ctx: Ctx): Promise<void> {
     if (!s || !p || s.pre.length === 0) return null;
     return (s.pre[s.pre.length - 1].close / p.rth[p.rth.length - 1].close - 1) * 100;
   };
-  const rows: { t: GapGoTrade; above20: boolean; sectorGreen: boolean | null }[] = [];
+  const rows: { t: GapGoTrade; above20: boolean; sectorGreen: boolean | null; hold: GapGoTrade | null; half: GapGoTrade | null }[] = [];
   let scanned = 0;
   for (const sym of names) {
     const bars = await ctx.intraday(sym, true);
@@ -274,7 +293,7 @@ async function theoryT2(ctx: Ctx): Promise<void> {
       if (atr === null || h20 === null) continue;
       const sg = etfGap(sectorFor(sym), s.date, sessions[i - 1].date);
       const t = replay(sym, s, "LONG", gap, atr, ctx.slip);
-      if (t) rows.push({ t, above20: pmLast > h20, sectorGreen: sg === null ? null : sg > 0 });
+      if (t) rows.push({ t, above20: pmLast > h20, sectorGreen: sg === null ? null : sg > 0, hold: replay(sym, s, "LONG", gap, atr, ctx.slip, "hold"), half: replay(sym, s, "LONG", gap, atr, ctx.slip, "half-hold") });
     }
   }
   ctx.say(`  ${rows.length} rule entries from gaps >= 2%`);
@@ -282,6 +301,10 @@ async function theoryT2(ctx: Ctx): Promise<void> {
     report(ctx, `gap >= ${min}%, any structure`, rows.filter((r) => r.t.gapPct >= min).map((r) => r.t));
     report(ctx, `gap >= ${min}%, above the 20-day high`, rows.filter((r) => r.t.gapPct >= min && r.above20).map((r) => r.t));
     report(ctx, `gap >= ${min}%, above the 20-day high, sector green (the AMD specification)`, rows.filter((r) => r.t.gapPct >= min && r.above20 && r.sectorGreen === true).map((r) => r.t), min === 3);
+    if (min === 3) {
+      reportVariants(ctx, "the AMD specification (gap >= 3%)", rows.filter((r) => r.t.gapPct >= 3 && r.above20 && r.sectorGreen === true));
+      reportVariants(ctx, "any mega-cap gap >= 3%", rows.filter((r) => r.t.gapPct >= 3));
+    }
   }
 }
 
@@ -293,6 +316,7 @@ async function theoryT3(ctx: Ctx): Promise<void> {
   const sessions = sessionsOf(spy).map((s) => s.date).filter((d) => ctx.inRange(d));
   const universe = new Set(ctx.entries.slice(0, ctx.args.maxNames).map((e) => e.symbol));
   const trades: (GapGoTrade & { bucket: string })[] = [];
+  const variants: (Variants & { bucket: string })[] = [];
   let reporters = 0; let withGap = 0; let noBars = 0;
   const seen = new Set<string>();
   for (let i = 0; i < sessions.length; i++) {
@@ -318,8 +342,12 @@ async function theoryT3(ctx: Ctx): Promise<void> {
         const di = days.findIndex((d) => d.date === sd);
         const atr = di > 0 ? atrOf(days, di - 1) : null;
         if (atr === null) break;
-        const t = replay(r.symbol, ss[idx], gap > 0 ? "LONG" : "SHORT", gap, atr, ctx.slip);
-        if (t) trades.push({ ...t, bucket: bucket(gap, [10]) });
+        const dir = gap > 0 ? "LONG" : "SHORT";
+        const t = replay(r.symbol, ss[idx], dir, gap, atr, ctx.slip);
+        if (t) {
+          trades.push({ ...t, bucket: bucket(gap, [10]) });
+          if (dir === "LONG") variants.push({ t, hold: replay(r.symbol, ss[idx], dir, gap, atr, ctx.slip, "hold"), half: replay(r.symbol, ss[idx], dir, gap, atr, ctx.slip, "half-hold"), bucket: bucket(gap, [10]) });
+        }
         break;
       }
     }
@@ -329,6 +357,8 @@ async function theoryT3(ctx: Ctx): Promise<void> {
   report(ctx, "long, all earnings gaps", trades.filter((t) => t.direction === "LONG"), true);
   report(ctx, "long, gap 5-10%", trades.filter((t) => t.direction === "LONG" && t.bucket === "<10"));
   report(ctx, "long, gap 10%+", trades.filter((t) => t.direction === "LONG" && t.bucket === "10+"), true);
+  reportVariants(ctx, "earnings gaps 10%+ long", variants.filter((v) => v.bucket === "10+"));
+  reportVariants(ctx, "all earnings gaps long", variants);
   report(ctx, "short, all earnings gaps (for the record)", trades.filter((t) => t.direction === "SHORT"));
   report(ctx, "short, gap 5-10%", trades.filter((t) => t.direction === "SHORT" && t.bucket === "<10"));
   report(ctx, "short, gap 10%+", trades.filter((t) => t.direction === "SHORT" && t.bucket === "10+"));
@@ -377,6 +407,43 @@ async function theoryT4(ctx: Ctx): Promise<void> {
   report(ctx, "short, gap still down at 09:25", rows.filter((r) => r.ah < 0 && r.held).map((r) => r.t));
 }
 
+// ----- T6: failed-gap fade -----
+async function theoryT6(ctx: Ctx): Promise<void> {
+  const names = ctx.entries.slice(0, ctx.args.maxNames).map((e) => e.symbol);
+  ctx.say(`\n===== T6 Failed-gap fade: a gap up that closes a 5-minute candle below its pre-market low is shorted with the mirror rule (mirror long for gaps down); ${names.length} names =====`);
+  const rows: { t: GapGoTrade; gap: number; fade: "SHORT" | "LONG" }[] = [];
+  const gapDays = new Map<string, number>(); const fired = new Map<string, number>();
+  let scanned = 0;
+  for (const sym of names) {
+    const bars = await ctx.intraday(sym, false);
+    scanned++;
+    if (scanned % 200 === 0) process.stdout.write(`  ${scanned}/${names.length} names, ${rows.length} fades\n`);
+    if (!bars) continue;
+    const sessions = sessionsOf(bars);
+    const days = dailyFromSessions(sessions);
+    for (let i = MIN_HISTORY; i < sessions.length; i++) {
+      const s = sessions[i];
+      if (s.pre.length === 0 || !ctx.inRange(s.date)) continue;
+      const gap = (s.pre[s.pre.length - 1].close / days[i - 1].close - 1) * 100;
+      if (Math.abs(gap) < 3) continue;
+      const atr = atrOf(days, i - 1);
+      if (atr === null) continue;
+      const key = `${gap > 0 ? "up" : "down"} ${bucket(gap, [5, 10])}`;
+      gapDays.set(key, (gapDays.get(key) ?? 0) + 1);
+      const fade: "SHORT" | "LONG" = gap > 0 ? "SHORT" : "LONG";
+      const t = replay(sym, s, fade, gap, atr, ctx.slip);
+      if (t) { rows.push({ t, gap, fade }); fired.set(key, (fired.get(key) ?? 0) + 1); }
+    }
+  }
+  ctx.say(`  gap days and how many fired the fade by 11:30: ${[...gapDays.entries()].sort().map(([k, n]) => `${k}%: ${fired.get(k) ?? 0}/${n}`).join(", ")}`);
+  report(ctx, "short fade, gap up 5-10%", rows.filter((r) => r.fade === "SHORT" && r.gap >= 5 && r.gap < 10).map((r) => r.t), true);
+  report(ctx, "short fade, gap up 3-5%", rows.filter((r) => r.fade === "SHORT" && r.gap >= 3 && r.gap < 5).map((r) => r.t));
+  report(ctx, "short fade, gap up 10%+", rows.filter((r) => r.fade === "SHORT" && r.gap >= 10).map((r) => r.t));
+  report(ctx, "long fade, gap down 5-10%", rows.filter((r) => r.fade === "LONG" && r.gap <= -5 && r.gap > -10).map((r) => r.t));
+  report(ctx, "long fade, gap down 3-5%", rows.filter((r) => r.fade === "LONG" && r.gap <= -3 && r.gap > -5).map((r) => r.t));
+  report(ctx, "long fade, gap down 10%+", rows.filter((r) => r.fade === "LONG" && r.gap <= -10).map((r) => r.t));
+}
+
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   setLogLevel("error");
@@ -384,7 +451,7 @@ async function main(): Promise<void> {
   if (!uni) throw new Error("no universe file; run npm run universe:build");
   const ctx = new Ctx(args, uni.entries);
   const today = etParts(ctx.now).date;
-  const ids = args.id === "ALL" ? ["T1", "T2", "T3", "T4"] : [args.id];
+  const ids = args.id === "ALL" ? ["T1", "T2", "T3", "T4", "T6"] : args.id === "T7" ? ["T2", "T3"] : [args.id];
   ctx.say(`Theory tests ${today}: source ${args.source}, window ${args.days} days (Yahoo) or the store${args.startDate || args.endDate ? `, sessions ${args.startDate ?? "start"} to ${args.endDate ?? "end"}` : ""}, slippage ${args.slipBps} bps/side, universe ${uni.entries.length} names (built ${uni.builtAt.slice(0, 10)})`);
   ctx.say(`Rule: first 5-minute close beyond the pre-market extreme (09:30 candle included) confirms; entry at the next candle's open; no signal after 11:30; skip if the open is ${OPEN_CHASE_PCT}% beyond the extreme; stop on a 5-minute close through the 09:30 candle's opposite extreme; half at 1 ATR, rest at 1.5 ATR; time exit 15:45. Pass: n >= 30, exp > 0, PF >= 1.3, both date halves positive.`);
   const started = Date.now();
@@ -394,6 +461,7 @@ async function main(): Promise<void> {
     else if (id === "T2") await theoryT2(ctx);
     else if (id === "T3") await theoryT3(ctx);
     else if (id === "T4") await theoryT4(ctx);
+    else if (id === "T6") await theoryT6(ctx);
     else ctx.say(`unknown theory ${id}`);
   }
   ctx.say(`\n${((Date.now() - started) / 60_000).toFixed(1)} min`);
@@ -405,7 +473,7 @@ async function main(): Promise<void> {
   const jsonFile = path.join(args.out, "theories.json");
   let existing: Headline[] = [];
   try { if (fs.existsSync(jsonFile)) existing = JSON.parse(fs.readFileSync(jsonFile, "utf-8")) as Headline[]; } catch { existing = []; }
-  const merged = [...existing.filter((h) => !ids.includes(h.id)), ...ctx.headlines];
+  const merged = [...existing.filter((h) => !ids.includes(h.id) && !(h.id === "T7" && ctx.headlines.some((x) => x.id === "T7" && x.label === h.label))), ...ctx.headlines];
   fs.writeFileSync(jsonFile, JSON.stringify(merged, null, 2) + "\n");
 }
 

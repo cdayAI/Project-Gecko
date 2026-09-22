@@ -142,6 +142,39 @@ window alone.
 
 Result: pending the store run.
 
+## T6 Failed-gap fade (registered 2026-09-22 15:25 UTC, before running)
+
+Statement: a 5 to 10% gap up that closes a 5-minute candle back below
+its pre-market low is a failed gap; shorting it with the mirror rule
+(entry at the next candle's open, stop on a 5-minute close above the
+09:30 candle's high, half at 1 ATR, rest at 1.5 ATR, time exit 15:45,
+no signal after 11:30, skip if the open is already more than 1.5% below
+the pre-market low) is positive. Mirror: a 5 to 10% gap down that closes
+back above its pre-market high, bought. Why: every 5 to 10% bucket lost
+when chased in the registered tests and in T3, and the after-hours drop
+shorts (T5 observation) are the same shape.
+
+Metric: headline line "short fade, gap up 5-10%"; the 3-5% and 10%+
+fades and the long mirror are descriptive.
+
+Result: pending.
+
+## T7 Catalyst exits (registered 2026-09-22 15:25 UTC, before running)
+
+Statement: on the populations that were positive with the registered
+exit (T3 earnings gaps of 10%+ long; T2 mega-cap gaps of 3%+ above the
+20-day high with the sector green), holding the whole position to the
+15:45 time exit, or half at 1 ATR and the rest to 15:45, beats the
+registered half at 1 ATR and rest at 1.5 ATR. Why: 45% of those trades
+ended at the time exit, which says the move was still running.
+
+Metric: the same trades replayed under each exit; a variant passes only
+if its expectancy is higher than the registered exit's in both date
+halves and its PF is at least 1.3. Printed inside the T2 and T3 output
+(`--id T7` runs both).
+
+Result: pending.
+
 ## Operator store runs (149 sessions of Schwab bars, on the operator's machine)
 
 ```powershell
@@ -149,6 +182,7 @@ npm run theory -- --id T2 --source store
 npm run theory -- --id T3 --source store
 npm run theory -- --id T4 --source store --end-date 2026-07-24
 npm run theory -- --id T1 --source store
+npm run theory -- --id T6 --source store
 ```
 
 Results land in docs/results/ and the evening push carries them. T4 with

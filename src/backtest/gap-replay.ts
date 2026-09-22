@@ -30,7 +30,13 @@ export const LAST_SIGNAL_MIN = 11 * 60 + 30;
 export const TIME_EXIT_MIN = 15 * 60 + 45;
 export const OPEN_CHASE_PCT = 1.5;
 
-export function simulate(symbol: string, date: string, direction: "LONG" | "SHORT", gapPct: number, above52w: boolean, rth: readonly Bar[], pmHigh: number, pmLow: number, atr: number, slip: number): GapGoTrade | null {
+// Exit modes: "targets" is the registered rule; "hold" keeps the whole
+// position to the 15:45 time exit (stop still active); "half-hold" takes
+// half at 1 ATR and holds the rest to 15:45. Variants exist for theory
+// tests (T7) only; the registered rule is "targets".
+export type ExitMode = "targets" | "hold" | "half-hold";
+
+export function simulate(symbol: string, date: string, direction: "LONG" | "SHORT", gapPct: number, above52w: boolean, rth: readonly Bar[], pmHigh: number, pmLow: number, atr: number, slip: number, exitMode: ExitMode = "targets"): GapGoTrade | null {
   const first = rth[0];
   const stop = direction === "LONG" ? first.low : first.high;
   let entryIdx = -1;
@@ -57,8 +63,8 @@ export function simulate(symbol: string, date: string, direction: "LONG" | "SHOR
     const m = minutesEt(b.timestamp);
     const stopHit = direction === "LONG" ? b.close < stop : b.close > stop;
     if (stopHit) { exits.push({ price: b.close * (1 - sign * slip), fraction: remaining, reason: "stop", time: hhmm(b.timestamp) }); remaining = 0; break; }
-    const reach1 = direction === "LONG" ? b.high >= t1 : b.low <= t1;
-    const reach2 = direction === "LONG" ? b.high >= t2 : b.low <= t2;
+    const reach1 = exitMode !== "hold" && (direction === "LONG" ? b.high >= t1 : b.low <= t1);
+    const reach2 = exitMode === "targets" && (direction === "LONG" ? b.high >= t2 : b.low <= t2);
     if (!hit1 && reach1) { exits.push({ price: t1 * (1 - sign * slip), fraction: 0.5, reason: "target1", time: hhmm(b.timestamp) }); remaining -= 0.5; hit1 = true; }
     if (hit1 && remaining > 0 && reach2) { exits.push({ price: t2 * (1 - sign * slip), fraction: remaining, reason: "target2", time: hhmm(b.timestamp) }); remaining = 0; break; }
     if (m >= TIME_EXIT_MIN) { exits.push({ price: b.close * (1 - sign * slip), fraction: remaining, reason: "time", time: hhmm(b.timestamp) }); remaining = 0; break; }
