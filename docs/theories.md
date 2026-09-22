@@ -33,7 +33,15 @@ the day itself and misses these.
 
 Metric: headline line "long, all"; buckets by day-2 pre-market gap.
 
-Result: pending.
+Result (2026-09-22, Yahoo, 2026-07-25 to 2026-09-22, 1,500 names, 10 bps):
+NOT QUALIFIED. 308 events (197 up days, 111 down days). Day 2 gapped in
+the day-1 direction only 31% of the time; median gap against it -0.82%.
+Long rule n=88, 43.2% win, -0.16%/trade, PF 0.86 (selection PF 0.60,
+validation PF 1.26); 62% of exits were the 15:45 time exit, 25% stops.
+Short rule n=47, 31.9% win, -0.74%, PF 0.60. The CONT tag stays on the
+night list as information, not as a reason to trade. Rerun on the store
+(`--source store`) for the 149-session answer; the file is
+docs/results/theory-t1-2026-09-22-yahoo.txt.
 
 ## T2 Mega-cap catalyst gap, the AMD type (registered 2026-09-22 15:20 UTC)
 
@@ -47,7 +55,18 @@ closed +9.95%.
 Metric: headline line "gap >= 3%, above the 20-day high, sector green";
 2% and 4% floors and the unfiltered lines are descriptive.
 
-Result: pending.
+Result (2026-09-22, Yahoo, 60 days, 101 names with 20-day dollar volume
+of $1B or more, 10 bps): NOT QUALIFIED on count, positive on everything
+else. The AMD specification: n=15, 60.0% win, +1.20%/trade, PF 2.46,
+selection +0.36% (PF 1.31) and validation +1.92% (PF 4.72), both
+positive; exits target1 20%, target2 10%, time 43%, stop 27%. Descriptive
+lines: any mega-cap gap of 3%+ n=78, 55.1% win, +0.73%, PF 1.80; any 2%+
+n=158, 52.5% win, +0.58%, PF 1.64; 4%+ with the AMD filters n=14, +1.18%,
+PF 2.34. The mega-cap population behaves unlike the universe, where the
+same rule lost (PF 0.73 / 0.78). Fifteen trades in 60 days cannot qualify
+anything; the store run (`npm run theory -- --id T2 --source store`,
+149 sessions) is the one that can. File:
+docs/results/theory-t2-2026-09-22-yahoo.txt.
 
 ## T3 Earnings gap-and-go (registered 2026-09-22 15:20 UTC)
 

@@ -11,5 +11,31 @@
     "verdict": "NOT QUALIFIED (n < 30)",
     "date": "2026-09-22",
     "source": "yahoo"
+  },
+  {
+    "id": "T1",
+    "label": "long, all",
+    "n": 88,
+    "win": 43.18181818181818,
+    "exp": -0.15755236519154128,
+    "pf": 0.8588049691660545,
+    "selExp": -0.5844190575165444,
+    "valExp": 0.21482070683665305,
+    "verdict": "NOT QUALIFIED",
+    "date": "2026-09-22",
+    "source": "yahoo"
+  },
+  {
+    "id": "T1",
+    "label": "short, all",
+    "n": 47,
+    "win": 31.914893617021278,
+    "exp": -0.7361833649744596,
+    "pf": 0.6025359069214619,
+    "selExp": -1.0275159653466035,
+    "valExp": -0.34288435447206445,
+    "verdict": "NOT QUALIFIED",
+    "date": "2026-09-22",
+    "source": "yahoo"
   }
 ]

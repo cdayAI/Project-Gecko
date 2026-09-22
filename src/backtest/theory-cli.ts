@@ -227,11 +227,13 @@ async function theoryT1(ctx: Ctx): Promise<void> {
     gaps.push(ev.dir === "LONG" ? gap : -gap);
     if ((ev.dir === "LONG" && gap > 0) || (ev.dir === "SHORT" && gap < 0)) gapsUp++;
     const t = replay(ev.symbol, s, ev.dir, gap, ev.atr, ctx.slip);
-    if (t) trades.push({ ...t, dir: ev.dir, gapBucket: bucket(gap, [0, 3, 10]) });
+    const signed = ev.dir === "LONG" ? gap : -gap;   // gap in the day-1 direction
+    if (t) trades.push({ ...t, dir: ev.dir, gapBucket: signed < 0 ? "<0" : signed < 3 ? "0-3" : signed < 10 ? "3-10" : "10+" });
   }
   ctx.say(`  day 2: ${events.length - noPm} with pre-market prints (${noPm} without), gap in the day-1 direction ${gaps.length ? (gapsUp / gaps.length * 100).toFixed(0) : "n/a"}%, median gap in that direction ${median(gaps).toFixed(2)}%`);
   report(ctx, "long, all", trades.filter((t) => t.dir === "LONG"), true);
-  for (const b of ["<0", "0-3", "3-10", "10+"]) report(ctx, `long, gap ${b}%`, trades.filter((t) => t.dir === "LONG" && t.gapBucket === b));
+  for (const b of ["<0", "0-3", "3-10", "10+"]) report(ctx, `long, day-2 gap ${b}% (in the day-1 direction)`, trades.filter((t) => t.dir === "LONG" && t.gapBucket === b));
+  for (const b of ["<0", "0-3", "3-10", "10+"]) report(ctx, `short, day-2 gap ${b}% (in the day-1 direction)`, trades.filter((t) => t.dir === "SHORT" && t.gapBucket === b));
   report(ctx, "short, all", trades.filter((t) => t.dir === "SHORT"), true);
 }
 
