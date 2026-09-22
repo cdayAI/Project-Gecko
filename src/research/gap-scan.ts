@@ -225,9 +225,9 @@ async function main(): Promise<void> {
   printTable(`GAP DOWN: LARGE (gap <= -${TRADE_GAP}%; forward test only)`, downs.filter((r) => r.gapPct <= -TRADE_GAP));
   printTable("GAP DOWN: WATCH (-5 to -10%)", downs.filter((r) => r.gapPct > -TRADE_GAP));
   process.stdout.write(`\nEntry rule (H-GAP-GO as registered; see docs/gap-and-go-registration-2026-09-21.md): no pre-market orders. Enter on the first 5-minute candle that CLOSES beyond the pre-market extreme (earliest 09:35). Stop: 5-minute close back through the 09:30 candle's opposite extreme. Targets: 1 ATR (half), 1.5 ATR (rest). Time exit 15:45. Skip if the open is more than 1.5% beyond the pre-market extreme. Status after the six-month Schwab-history test (docs/gap-and-go-registration-2026-09-21.md): the family is NOT a qualified edge (base rule PF 0.73 / 0.78 in both halves). Rows marked * meet the one specification that was positive in both halves of 123 sessions (H-GAP-SECTOR-LONG: gap >= 10%, above the 20-day high, LONG, sector ETF up pre-market): 55% win, about +0.4%/trade on the stock, PF 1.3, roughly one a day, and possibly chance (one survivor of 480 variants). Forward test those at small size and log every fill; treat unmarked rows as watch only. Tighter targets, time exits, wider stops did not survive; do not improvise them.\n`);
-  process.stdout.write(schwab
+  process.stdout.write(schwab && !preOpen
     ? `Option marks are live from Schwab. Pay at most 10% over the mid at entry. Max loss is the full premium; the stop lives on the stock.\n\n`
-    : `Option marks shown are the chain's last marks (prior close before 09:30). Read the live quote at 09:30 and pay at most 10% over that mid. Max loss is the full premium; the stop lives on the stock.\n\n`);
+    : `Options do not trade before 09:30, so the option marks and deltas shown are the prior close's; the strike was chosen against the pre-market price. Read the live quote at 09:30 and pay at most 10% over that mid. Max loss is the full premium; the stop lives on the stock.\n\n`);
 }
 
 function pickStats(e: { high20: number; low20: number; high252: number; atr14: number; avgDollarVol20: number }): Stats {

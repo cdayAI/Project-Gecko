@@ -26,13 +26,18 @@ export interface ContractPick {
 }
 
 
-// Live chain: nearest expiration at least 7 days out, strike nearest 2.5% OTM.
+// Live chain: first Friday expiry between minDays and maxDays out, strike
+// nearest otmPct out of the money measured from the caller's price. The
+// request asks for every strike (range ALL): a strikeCount window is centred
+// on Schwab's own underlying price, which before the open is still the prior
+// close, so on 2026-09-22 a 30% gapper (VKTX, pre-market 39.06) came back
+// with strikes 27.5 to 33 and the picker named a deep in-the-money call.
 export async function pickSchwabContract(rest: SchwabRest, symbol: string, price: number, right: "C" | "P", otmPct: number, now: number, minDays = 7, maxDays = 45): Promise<ContractPick | null> {
   try {
     const chain = await rest.getOptionChain({
       symbol,
       contractType: right === "C" ? "CALL" : "PUT",
-      strikeCount: 12,
+      range: "ALL",
       includeUnderlyingQuote: false,
       strategy: "SINGLE",
       fromDate: etParts(now + minDays * 86_400_000).date,

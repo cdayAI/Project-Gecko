@@ -57,6 +57,10 @@ export interface OptionChainParams {
   readonly symbol: string;
   readonly contractType?: "CALL" | "PUT" | "ALL";
   readonly strikeCount?: number;
+  // Schwab's documented strike filter: ITM, NTM, OTM, SAK, SBK, SNK, ALL.
+  // strikeCount is centred on Schwab's own underlying price, which before the
+  // open is still the prior close; ALL returns every listed strike.
+  readonly range?: "ITM" | "NTM" | "OTM" | "SAK" | "SBK" | "SNK" | "ALL";
   readonly includeUnderlyingQuote?: boolean;
   readonly strategy?: "SINGLE" | "ANALYTICAL" | "COVERED" | "VERTICAL" | "CALENDAR" | "STRANGLE" | "STRADDLE" | "BUTTERFLY" | "CONDOR" | "DIAGONAL" | "COLLAR" | "ROLL";
   readonly fromDate?: string;         // YYYY-MM-DD
@@ -238,6 +242,7 @@ export class SchwabRest {
     qs.set("symbol", params.symbol);
     if (params.contractType) qs.set("contractType", params.contractType);
     if (params.strikeCount !== undefined) qs.set("strikeCount", String(params.strikeCount));
+    if (params.range) qs.set("range", params.range);
     if (params.includeUnderlyingQuote !== undefined) qs.set("includeUnderlyingQuote", String(params.includeUnderlyingQuote));
     if (params.strategy) qs.set("strategy", params.strategy);
     if (params.fromDate) qs.set("fromDate", params.fromDate);
