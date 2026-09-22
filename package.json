@@ -63,7 +63,9 @@
     "history:pull": "node --import tsx src/data/history-pull.ts",
     "log": "node --import tsx src/research/trade-log.ts",
     "packet": "node --import tsx src/research/daily-packet.ts",
-    "live": "node --import tsx src/research/live-monitor.ts"
+    "live": "node --import tsx src/research/live-monitor.ts",
+    "morning": "node --import tsx src/research/morning.ts",
+    "evening": "node --import tsx src/research/evening-plan.ts"
   },
   "dependencies": {
     "dotenv": "^16",

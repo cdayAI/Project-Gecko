@@ -120,6 +120,7 @@ async function main(): Promise<void> {
   if (duringSession) process.stdout.write(`WARNING: run during the session; today's bar is partial. Re-run after 16:00 ET for final signals.\n`);
   process.stdout.write(`Evaluated ${evaluated} names (${failed} failed), ${((Date.now() - startedAt) / 60_000).toFixed(1)} min. Contracts via ${session.rest ? `Schwab live chain (${session.reason})` : "Cboe delayed chain (closing marks)"}.\n`);
   process.stdout.write(`Breadth: ${breadth} names down 3 sessions >= 1.5 ATR above their 200-day (${candidates.length} with drops >= ${args.minDrop} ATR)  ->  ${verdict}\n`);
+  if (args.mode === "wr") process.stdout.write(`Breadth-30 tier (H-BOUNCE base rule, more days and less edge: +0.40%/trade, PF 1.25, 424 trades over 134 active days): ${breadth >= BREADTH_GATE ? "TRADE (rank by drop, up to 5, exit on a close above the 5-day average)" : "STAND ASIDE (breadth below 30)"}\n`);
   process.stdout.write(`SPY regime: ${spyAbove50 ? "above" : "below"} its 50-day (the diagnostic did better below: +0.68%/trade vs +0.07%).\n`);
   process.stdout.write(`\nCandidates ranked by drop size (largest first):\n`);
   process.stdout.write(`  ${"Sym".padEnd(6)}${"Close".padStart(9)}${"Drop ATR".padStart(9)}${"3d %".padStart(8)}${"ATR".padStart(8)}${(args.mode === "wr" ? "Target (+1% of entry)" : "SMA5 (target ref)").padStart(22)}${"Stop ref (close-2ATR)".padStart(22)}${"$vol20".padStart(8)}  Contract (${args.mode === "wr" ? "deep ITM call" : "ATM call"}, 14-35d)\n`);

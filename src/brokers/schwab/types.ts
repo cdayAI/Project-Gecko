@@ -227,6 +227,34 @@ export interface SchwabQuote {
     readonly totalVolume?: number;
     readonly tradeTime?: number;
     readonly quoteTime?: number;
+    // Documented equity quote fields; absent for some asset types.
+    readonly openPrice?: number;
+    readonly highPrice?: number;
+    readonly lowPrice?: number;
+    readonly closePrice?: number;       // prior close; rolls to today's close overnight
+    readonly netChange?: number;
+    readonly netPercentChange?: number;
+  };
+  // Regular-session block (documented): today's 16:00 close after the bell.
+  readonly regular?: {
+    readonly regularMarketLastPrice?: number;
+    readonly regularMarketLastSize?: number;
+    readonly regularMarketNetChange?: number;
+    readonly regularMarketPercentChange?: number;
+    readonly regularMarketTradeTime?: number;
+  };
+  // Extended-hours block (documented): last pre-market or after-hours trade.
+  readonly extended?: {
+    readonly askPrice?: number;
+    readonly askSize?: number;
+    readonly bidPrice?: number;
+    readonly bidSize?: number;
+    readonly lastPrice?: number;
+    readonly lastSize?: number;
+    readonly mark?: number;
+    readonly quoteTime?: number;
+    readonly totalVolume?: number;
+    readonly tradeTime?: number;
   };
 }
 
