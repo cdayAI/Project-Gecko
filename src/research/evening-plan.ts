@@ -191,6 +191,24 @@ function msg(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+interface TheoryHeadline { id: string; label: string; n: number; win: number; exp: number; pf: number; verdict: string; date: string; source: string }
+
+// Tested base rates per tag from docs/results/theories.json (npm run theory).
+function theoryLines(): string[] {
+  const f = path.join("docs", "results", "theories.json");
+  let rows: TheoryHeadline[] = [];
+  try { if (fs.existsSync(f)) rows = JSON.parse(fs.readFileSync(f, "utf-8")) as TheoryHeadline[]; } catch { rows = []; }
+  if (rows.length === 0) return ["Tested base rates: none recorded yet (npm run theory)."];
+  const tagFor: Record<string, string> = { T1: "CONT tags (day-2 continuation)", T2: "mega-cap gaps 3%+ above the 20-day high with the sector green", T3: "ER tags (earnings gaps)", T4: "AH tags (after-hours movers)" };
+  const out = ["Tested base rates (docs/theories.md; a PASS is a forward-test hypothesis, not an edge):"];
+  for (const id of ["T4", "T3", "T1", "T2"]) {
+    const hs = rows.filter((r) => r.id === id);
+    if (hs.length === 0) continue;
+    for (const h of hs) out.push(`- ${id} ${tagFor[id] ?? ""}, ${h.label}: n=${h.n}, win ${h.win.toFixed(0)}%, ${h.exp >= 0 ? "+" : ""}${h.exp.toFixed(2)}%/trade, PF ${h.pf.toFixed(2)}, ${h.verdict} (${h.source}, ${h.date})`);
+  }
+  return out;
+}
+
 function round4(v: number): number {
   return Math.round(v * 10_000) / 10_000;
 }
@@ -343,6 +361,8 @@ async function main(): Promise<void> {
     `## Tier 1: gap candidates for the 08:50 validation (${kept.length})`,
     ``,
     `A row becomes a star in the morning only if all four hold: pre-market last at or beyond the star level (close +10%, or -10% for a short), above the 20-day high, its sector ETF green pre-market, and a catalyst you can name. Entry is never before 09:35: the first 5-minute close beyond the pre-market extreme; stop on a 5-minute close through the 09:30 candle's opposite extreme; half at 1 ATR, rest at 1.5 ATR; out by 15:45. Contract marks are tonight's close and options do not trade pre-market: re-price at 09:30 and pay at most 10% over the live mid. Tags: AH after-hours mover, ER-AMC reports tonight, ER-BMO reports before the open, ER? time not supplied, CONT continuation (big day, closed near the extreme, through the 20-day level).`,
+    ``,
+    ...theoryLines(),
     ``,
     `| Sym | Tags | Side | Close | AH last | AH % | AH vol | Day % | Star level | 20d high | ATR (T1 / T2) | Sector today | Contract (tonight's marks) | Headlines | Jev | Top headline |`,
     `|---|---|---|---:|---:|---:|---:|---:|---:|---:|---|---|---|---:|---|---|`,

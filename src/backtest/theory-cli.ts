@@ -164,7 +164,7 @@ function fmtStat(s: Stat): string {
 function report(ctx: Ctx, label: string, ts: readonly GapGoTrade[], headline = false): void {
   const all = stat(ts);
   ctx.say(`  ${label}: ${fmtStat(all)}`);
-  if (!headline || ts.length < 4) return;
+  if ((!headline && ts.length < 30) || ts.length < 4) return;
   const dates = [...new Set(ts.map((t) => t.date))].sort();
   const split = dates[Math.floor(dates.length / 2) - 1];
   const sel = stat(ts.filter((t) => t.date <= split));
@@ -173,8 +173,8 @@ function report(ctx: Ctx, label: string, ts: readonly GapGoTrade[], headline = f
   ctx.say(`    selection (<= ${split}): ${fmtStat(sel)}`);
   ctx.say(`    validation (> ${split}): ${fmtStat(val)}`);
   const verdict = pass ? "PASS" : all.n < 30 ? "NOT QUALIFIED (n < 30)" : "NOT QUALIFIED";
-  ctx.say(`    verdict: ${pass ? "PASS (n >= 30, exp > 0, PF >= 1.3, both halves positive)" : verdict}`);
-  ctx.headlines.push({ id: ctx.currentId, label, n: all.n, win: all.win, exp: all.exp, pf: all.pf, selExp: sel.exp, valExp: val.exp, verdict, date: etParts(ctx.now).date, source: ctx.args.source });
+  ctx.say(`    ${headline ? "verdict" : "descriptive line, no verdict; would read"}: ${pass ? "PASS (n >= 30, exp > 0, PF >= 1.3, both halves positive)" : verdict}`);
+  if (headline) ctx.headlines.push({ id: ctx.currentId, label, n: all.n, win: all.win, exp: all.exp, pf: all.pf, selExp: sel.exp, valExp: val.exp, verdict, date: etParts(ctx.now).date, source: ctx.args.source });
   const mix = new Map<string, number>();
   for (const t of ts) for (const e of t.exits) mix.set(e.reason, (mix.get(e.reason) ?? 0) + e.fraction);
   ctx.say(`    exit mix: ${[...mix.entries()].map(([k, v]) => `${k} ${(v / ts.length * 100).toFixed(0)}%`).join(", ")}`);

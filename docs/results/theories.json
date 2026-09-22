@@ -1,0 +1,15 @@
+[
+  {
+    "id": "T2",
+    "label": "gap >= 3%, above the 20-day high, sector green (the AMD specification)",
+    "n": 15,
+    "win": 60,
+    "exp": 1.1957569216219186,
+    "pf": 2.464235321176676,
+    "selExp": 0.3624322558396175,
+    "valExp": 1.924916004181433,
+    "verdict": "NOT QUALIFIED (n < 30)",
+    "date": "2026-09-22",
+    "source": "yahoo"
+  }
+]
