@@ -93,9 +93,15 @@ target2 9%, time 45%, stop 27%. Against the no-catalyst reference for
 10%+ gaps (45% and 54% win, -0.28% and +0.55%), the earnings catalyst
 adds about 10 points of win rate. 5-10% earnings gaps lost on both sides,
 like every other 5-10% gap. Shorts: all n=83 not qualified; 10%+ n=35,
-51.4% win, +0.69%, PF 1.39, descriptive. The validation half holds 12
-trades, so the store run is required before this is more than a
-hypothesis. File: docs/results/theory-t3-2026-09-22-yahoo.txt.
+51.4% win, +0.69%, PF 1.39, both halves positive (selection +0.42%,
+validation +1.21%), descriptive only because shorts were declared for
+the record. Observation retained: earnings gaps down 10%+ shorted may
+work as well as the longs; it counts only on the store run with
+`--end-date 2026-07-24`, line "short, gap 10%+". The validation half of
+the long headline holds 12 trades, so the store run is required before
+any of this is more than a hypothesis. File:
+docs/results/theory-t3-2026-09-22-yahoo.txt (rerun with the T7 lines,
+same 392 gaps).
 
 What it changes on the night list: an ER-tagged name that gaps 10% or
 more in the morning carries the only catalyst-specific positive base
@@ -193,7 +199,16 @@ on any mega-cap gap of 3%+ (n=78: +1.04%, PF 2.13, halves +1.00% /
 1 ATR, rest to 15:45" beats it on the AMD specification (+1.87%, PF
 3.29) but not on the broader line. Read: on mega-caps the 1.5 ATR target
 sells the move early. Not applied to the registered rule until the store
-run agrees. T3 population: pending.
+run agrees.
+
+Result on the T3 populations (same run, 2026-09-22): neither variant
+beats the registered exit. Earnings gaps 10%+ long: hold to 15:45
++0.66% (PF 1.41, halves +0.32% / +1.58%) against the registered +0.64%
+(halves +0.16% / +1.92%); half at 1 ATR and hold +0.65%. All earnings
+gaps long: hold +0.43% against +0.22%, but PF 1.26 and one half flat.
+Read: earnings gaps pay the 1 and 1.5 ATR targets about as often as they
+run; mega-cap catalyst gaps run. The exit stays as registered for
+earnings names.
 
 ## T8 Mega-cap gap, plain rule and the hold exit (registered 2026-09-22 15:40 UTC, after the T2 rerun)
 
@@ -221,6 +236,7 @@ npm run theory -- --id T4 --source store --end-date 2026-07-24
 npm run theory -- --id T1 --source store
 npm run theory -- --id T6 --source store
 npm run theory -- --id T2 --source store --end-date 2026-07-24
+npm run theory -- --id T3 --source store --end-date 2026-07-24
 ```
 
 Results land in docs/results/ and the evening push carries them. T4 with
