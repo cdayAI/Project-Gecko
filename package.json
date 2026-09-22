@@ -62,7 +62,8 @@
     "backtest:mr": "node --import tsx src/backtest/intraday-mr-cli.ts",
     "history:pull": "node --import tsx src/data/history-pull.ts",
     "log": "node --import tsx src/research/trade-log.ts",
-    "packet": "node --import tsx src/research/daily-packet.ts"
+    "packet": "node --import tsx src/research/daily-packet.ts",
+    "live": "node --import tsx src/research/live-monitor.ts"
   },
   "dependencies": {
     "dotenv": "^16",

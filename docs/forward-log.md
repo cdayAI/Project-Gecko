@@ -30,6 +30,26 @@ partner reads it from that branch. Files:
   type, guidance change, commercial commitment, dilution, thesis
   relation, evidence scope), when a key was available
 
+## During the session
+
+```powershell
+npm run live
+```
+
+Second PowerShell window, after the morning packet. It reads the packet's
+gap rows (pre-market high and low, ATR, long for gap up, short for gap
+down), pulls Schwab minute bars through the vault every 30 seconds, and
+applies the registered rule candle by candle: skip if the open is more
+than 1.5% beyond the pre-market extreme, entry on the first 5-minute
+close beyond it from 09:35, stop on a 5-minute close through the 09:30
+candle's opposite extreme, half at 1 ATR, rest at 1.5 ATR, time exit
+15:45. Each row shows WAITING, IN, SKIPPED or DONE with the entry, stop
+and target prices and the last four candles. `--once` prints one
+snapshot; `--symbols ONON,ECO` narrows it or adds names that are not in
+the packet; `--interval 20` refreshes faster. Every refresh rewrites
+`docs/daily/YYYY-MM-DD/live.txt`, so the closing packet carries the day's
+trigger record. It never places orders.
+
 ## After the close
 
 Log every decision, taken or watched, then push a closing packet:
