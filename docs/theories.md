@@ -300,6 +300,37 @@ Metric: headline "long, reaction +5%+, hold 5 sessions"; 10- and
 20-session holds and reaction-size buckets descriptive; the short mirror
 (-5% or worse, closing in the lower half) for the record.
 
+Result (2026-09-23, Yahoo daily, 291 sessions 2025-07-25 to 2026-09-21,
+10 bps): NOT QUALIFIED. 5,993 earnings reactions in the universe, 2,420
+signals (about 175 a month). Long, 5-session hold: n=1,300, 49.0% win,
++0.33%/trade, PF 1.13; selection (to 2026-03-04) -0.03%, PF 0.99;
+validation +0.66%, PF 1.26. Every hold length shows the same split:
+10 sessions -1.07% then +1.08%; 20 sessions -0.21% then +1.26%. The
+money was made only after March 2026, a rising market, so this reads as
+market direction, not earnings drift. Shorts lost overall (-0.70%, PF
+0.77), again only in the rising half. Follow-up registered as T11. File:
+docs/results/theory-t10-2026-09-23-yahoo.txt.
+
+## T11 Earnings drift in an uptrend (registered 2026-09-23 14:30 UTC, after T10, before running)
+
+Statement: T10's long drift lost from July 2025 to March 2026 and paid
+from March to September 2026, a rising market. Hypothesis: the drift pays
+only when the market is in an uptrend. Rule: T10's long signal (reaction
+day +5% or more, closing in the upper half of its range, entry at the
+next open or after both candidate days when the report time is not
+supplied, 5-session hold, stop on a close 2 ATR against), taken only when
+SPY closed above its 50-day average on the reaction day.
+
+Validation on sessions T10 never saw: 2023-01-03 to 2025-07-24, daily
+bars and the Nasdaq calendar, same universe. The universe is today's
+names, so survivorship flatters longs in both windows; the comparison
+with the unfiltered rule on the same window is what counts.
+
+Pass: on the unseen window, n >= 30, expectancy > 0, PF >= 1.3, both
+halves of that window positive, and expectancy above the unfiltered
+T10 rule on the same window. The T10 window is reported split by the
+same filter for reference only (seen, cannot count).
+
 Result: pending.
 
 ## Operator store runs (149 sessions of Schwab bars, on the operator's machine)

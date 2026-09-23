@@ -1,0 +1,47 @@
+Theory tests 2026-09-23: source yahoo, window 59 days (Yahoo) or the store, slippage 10 bps/side, universe 1734 names (built 2026-09-21)
+Rule: first 5-minute close beyond the pre-market extreme (09:30 candle included) confirms; entry at the next candle's open; no signal after 11:30; skip if the open is 1.5% beyond the extreme; stop on a 5-minute close through the 09:30 candle's opposite extreme; half at 1 ATR, rest at 1.5 ATR; time exit 15:45. Pass: n >= 30, exp > 0, PF >= 1.3, both date halves positive.
+
+===== T10 Earnings drift (swing): reaction day +5%+ closing in the upper half of its range; long at the next open (after both candidate days when the report time is not supplied); hold 5 sessions (10 and 20 descriptive); stop on a close 2 ATR against =====
+  5993 earnings reactions in the universe over 291 sessions (2025-07-25 to 2026-09-21); 2420 signals, about 175 a month
+  long, reaction +5%+, hold 5 sessions: n=1300  win 49.0%  exp +0.33%  PF 1.13  net at $1k/trade +$4344
+    selection (<= 2026-03-04): n=616  win 47.9%  exp -0.03%  PF 0.99  net at $1k/trade -$178
+    validation (> 2026-03-04): n=684  win 50.0%  exp +0.66%  PF 1.26  net at $1k/trade +$4522
+    verdict: NOT QUALIFIED
+    exit mix: hold 89%, stop 11%
+  long, reaction +5-10%, hold 5: n=697  win 49.5%  exp +0.28%  PF 1.12  net at $1k/trade +$1941
+    selection (<= 2026-02-26): n=309  win 51.5%  exp +0.45%  PF 1.22  net at $1k/trade +$1397
+    validation (> 2026-02-26): n=388  win 47.9%  exp +0.14%  PF 1.06  net at $1k/trade +$543
+    descriptive line, no verdict; would read: NOT QUALIFIED
+    exit mix: hold 88%, stop 12%
+  long, reaction +10%+, hold 5: n=603  win 48.4%  exp +0.40%  PF 1.14  net at $1k/trade +$2403
+    selection (<= 2026-03-11): n=284  win 45.4%  exp -0.26%  PF 0.91  net at $1k/trade -$750
+    validation (> 2026-03-11): n=319  win 51.1%  exp +0.99%  PF 1.37  net at $1k/trade +$3153
+    descriptive line, no verdict; would read: NOT QUALIFIED
+    exit mix: hold 91%, stop 9%
+  long, hold 10 sessions: n=1295  win 43.5%  exp +0.07%  PF 1.02  net at $1k/trade +$843
+    selection (<= 2026-03-03): n=612  win 41.5%  exp -1.07%  PF 0.72  net at $1k/trade -$6543
+    validation (> 2026-03-03): n=683  win 45.2%  exp +1.08%  PF 1.30  net at $1k/trade +$7386
+    descriptive line, no verdict; would read: NOT QUALIFIED
+    exit mix: hold 76%, stop 24%
+  long, hold 20 sessions: n=1275  win 42.7%  exp +0.63%  PF 1.13  net at $1k/trade +$8032
+    selection (<= 2026-02-25): n=547  win 41.5%  exp -0.21%  PF 0.96  net at $1k/trade -$1163
+    validation (> 2026-02-25): n=728  win 43.5%  exp +1.26%  PF 1.25  net at $1k/trade +$9195
+    descriptive line, no verdict; would read: NOT QUALIFIED
+    exit mix: hold 60%, stop 40%
+  short, reaction -5% or worse, hold 5 sessions (for the record): n=1119  win 47.7%  exp -0.70%  PF 0.77  net at $1k/trade -$7856
+    selection (<= 2026-03-18): n=571  win 49.7%  exp +0.13%  PF 1.05  net at $1k/trade +$741
+    validation (> 2026-03-18): n=548  win 45.6%  exp -1.57%  PF 0.57  net at $1k/trade -$8597
+    descriptive line, no verdict; would read: NOT QUALIFIED
+    exit mix: hold 92%, stop 8%
+  short, hold 10 sessions: n=1111  win 48.1%  exp -0.68%  PF 0.83  net at $1k/trade -$7536
+    selection (<= 2026-03-13): n=563  win 51.5%  exp +0.65%  PF 1.20  net at $1k/trade +$3687
+    validation (> 2026-03-13): n=548  win 44.5%  exp -2.05%  PF 0.57  net at $1k/trade -$11224
+    descriptive line, no verdict; would read: NOT QUALIFIED
+    exit mix: hold 81%, stop 19%
+  short, hold 20 sessions: n=1089  win 45.7%  exp -1.80%  PF 0.68  net at $1k/trade -$19593
+    selection (<= 2026-03-09): n=560  win 47.1%  exp -0.83%  PF 0.84  net at $1k/trade -$4668
+    validation (> 2026-03-09): n=529  win 44.2%  exp -2.82%  PF 0.54  net at $1k/trade -$14924
+    descriptive line, no verdict; would read: NOT QUALIFIED
+    exit mix: hold 66%, stop 34%
+
+15.5 min
