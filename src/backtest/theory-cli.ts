@@ -61,7 +61,12 @@ class Ctx {
   readonly slip: number;
   constructor(readonly args: Args, readonly entries: readonly UniverseEntry[]) { this.slip = args.slipBps / 10_000; }
   say(s: string): void { this.lines.push(s); process.stdout.write(s + "\n"); }
-  inRange(date: string): boolean { return (this.args.startDate === null || date >= this.args.startDate) && (this.args.endDate === null || date <= this.args.endDate); }
+  inRange(date: string): boolean {
+    // Today's session counts only once it is complete (the Yahoo runs of 2026-09-22 included the then-partial session).
+    const p = etParts(this.now);
+    if (date > p.date || (date === p.date && p.hour * 60 + p.minute < 16 * 60 + 5)) return false;
+    return (this.args.startDate === null || date >= this.args.startDate) && (this.args.endDate === null || date <= this.args.endDate);
+  }
 
   // Full intraday history for a symbol: the store when present and allowed, else Yahoo (about 60 days).
   async intraday(symbol: string, cache: boolean): Promise<readonly Bar[] | null> {
@@ -298,9 +303,10 @@ async function theoryT2(ctx: Ctx): Promise<void> {
   }
   ctx.say(`  ${rows.length} rule entries from gaps >= 2%`);
   for (const min of [2, 3, 4]) {
-    report(ctx, `gap >= ${min}%, any structure`, rows.filter((r) => r.t.gapPct >= min).map((r) => r.t));
+    report(ctx, `gap >= ${min}%, any structure${min === 2 ? " (T8 headline)" : ""}`, rows.filter((r) => r.t.gapPct >= min).map((r) => r.t), min === 2);
     report(ctx, `gap >= ${min}%, above the 20-day high`, rows.filter((r) => r.t.gapPct >= min && r.above20).map((r) => r.t));
     report(ctx, `gap >= ${min}%, above the 20-day high, sector green (the AMD specification)`, rows.filter((r) => r.t.gapPct >= min && r.above20 && r.sectorGreen === true).map((r) => r.t), min === 3);
+    if (min === 2) reportVariants(ctx, "any mega-cap gap >= 2% (T8)", rows.filter((r) => r.t.gapPct >= 2));
     if (min === 3) {
       reportVariants(ctx, "the AMD specification (gap >= 3%)", rows.filter((r) => r.t.gapPct >= 3 && r.above20 && r.sectorGreen === true));
       reportVariants(ctx, "any mega-cap gap >= 3%", rows.filter((r) => r.t.gapPct >= 3));
@@ -444,6 +450,172 @@ async function theoryT6(ctx: Ctx): Promise<void> {
   report(ctx, "long fade, gap down 10%+", rows.filter((r) => r.fade === "LONG" && r.gap <= -10).map((r) => r.t));
 }
 
+// ----- T9: gap attribute filters (accuracy) -----
+interface T9Row { readonly t: GapGoTrade; readonly dir: "LONG" | "SHORT"; readonly gap: number; readonly stopAtr: number; readonly firstVol: number | null; readonly pmVolRatio: number | null; readonly tapeWith: boolean | null; readonly entryMin: number; readonly strength: number; readonly above20: boolean; readonly sectorGreen: boolean | null }
+
+async function theoryT9(ctx: Ctx): Promise<void> {
+  const names = ctx.entries.slice(0, ctx.args.maxNames).map((e) => e.symbol);
+  ctx.say(`\n===== T9 Gap attribute filters: every pre-market gap of 3%+ replayed with the registered rule (long up, short down), then six pre-declared filters; ${names.length} names =====`);
+  const spyBars = await ctx.intraday("SPY", true);
+  const spy = new Map((spyBars ? sessionsOf(spyBars) : []).map((x) => [x.date, x] as const));
+  const etf = new Map<string, Map<string, Session>>();
+  for (const e of SECTOR_ETFS) { const b = await ctx.intraday(e, true); if (b) etf.set(e, new Map(sessionsOf(b).map((x) => [x.date, x] as const))); }
+  const rows: T9Row[] = [];
+  let scanned = 0;
+  for (const sym of names) {
+    const bars = await ctx.intraday(sym, true);
+    scanned++;
+    if (scanned % 200 === 0) process.stdout.write(`  ${scanned}/${names.length} names, ${rows.length} trades\n`);
+    if (!bars) continue;
+    const sessions = sessionsOf(bars);
+    const days = dailyFromSessions(sessions);
+    for (let i = MIN_HISTORY; i < sessions.length; i++) {
+      const s = sessions[i];
+      if (s.pre.length === 0 || !ctx.inRange(s.date)) continue;
+      const pmLast = s.pre[s.pre.length - 1].close;
+      const gap = (pmLast / days[i - 1].close - 1) * 100;
+      if (Math.abs(gap) < 3) continue;
+      const atr = atrOf(days, i - 1); const h20 = high20(days, i);
+      if (atr === null || h20 === null) continue;
+      const dir: "LONG" | "SHORT" = gap > 0 ? "LONG" : "SHORT";
+      const t = replay(sym, s, dir, gap, atr, ctx.slip);
+      if (!t) continue;
+      const long = dir === "LONG";
+      const f = s.rth[0];
+      const range = f.high - f.low;
+      const strength = range > 0 ? (long ? (f.close - f.low) / range : (f.high - f.close) / range) : 0.5;
+      const prev5 = sessions.slice(Math.max(0, i - 5), i).flatMap((x) => x.rth);
+      const avg5m = prev5.length ? prev5.reduce((a, b) => a + b.volume, 0) / prev5.length : 0;
+      const prev20 = sessions.slice(Math.max(0, i - 20), i);
+      const avgDay = prev20.length ? prev20.reduce((a, x) => a + x.rth.reduce((q, b) => q + b.volume, 0), 0) / prev20.length : 0;
+      const pmVol = s.pre.reduce((a, b) => a + b.volume, 0);
+      const entryMin = Number(t.entryTime.slice(0, 2)) * 60 + Number(t.entryTime.slice(3, 5));
+      const sp = spy.get(s.date);
+      const spyAt = sp ? sp.rth.filter((b) => minutesEt(b.timestamp) <= entryMin).pop() : undefined;
+      const tapeWith = sp && spyAt && sp.rth.length ? (long ? spyAt.open > sp.rth[0].open : spyAt.open < sp.rth[0].open) : null;
+      const sm = etf.get(sectorFor(sym)); const se = sm?.get(s.date); const sePrev = sm?.get(sessions[i - 1].date);
+      const sectorGreen = se && sePrev && se.pre.length > 0 && sePrev.rth.length > 0 ? se.pre[se.pre.length - 1].close > sePrev.rth[sePrev.rth.length - 1].close : null;
+      rows.push({ t, dir, gap, stopAtr: Math.abs(t.entry - t.stop) / atr, firstVol: avg5m > 0 ? f.volume / avg5m : null, pmVolRatio: pmVol > 0 && avgDay > 0 ? pmVol / avgDay : null, tapeWith, entryMin, strength, above20: pmLast > h20, sectorGreen });
+    }
+  }
+  ctx.say(`  ${rows.length} rule trades from gaps of 3%+ (${rows.filter((r) => r.pmVolRatio !== null).length} with pre-market volume)`);
+  const pops: readonly (readonly [string, (r: T9Row) => boolean])[] = [
+    ["long, gap 3-5%", (r) => r.dir === "LONG" && r.gap < 5],
+    ["long, gap 5-10%", (r) => r.dir === "LONG" && r.gap >= 5 && r.gap < 10],
+    ["long, gap 10%+", (r) => r.dir === "LONG" && r.gap >= 10],
+    ["long, star spec (10%+, above the 20-day high, sector green)", (r) => r.dir === "LONG" && r.gap >= 10 && r.above20 && r.sectorGreen === true],
+    ["short, gap 3-5%", (r) => r.dir === "SHORT" && r.gap > -5],
+    ["short, gap 5-10%", (r) => r.dir === "SHORT" && r.gap <= -5 && r.gap > -10],
+    ["short, gap 10%+", (r) => r.dir === "SHORT" && r.gap <= -10],
+  ];
+  const filters: readonly (readonly [string, (r: T9Row) => boolean | null])[] = [
+    ["F1 stop within 1 ATR", (r) => r.stopAtr <= 1],
+    ["F2 09:30 volume >= 3x a normal 5-min bar", (r) => r.firstVol === null ? null : r.firstVol >= 3],
+    ["F3 SPY with the trade at entry", (r) => r.tapeWith],
+    ["F4 entry by 09:45", (r) => r.entryMin <= 9 * 60 + 45],
+    ["F5 strong 09:30 candle (top or bottom third)", (r) => r.strength >= 2 / 3],
+    ["F6 pre-market volume >= 10% of a day", (r) => r.pmVolRatio === null ? null : r.pmVolRatio >= 0.1],
+  ];
+  const sp = (x: Stat): string => `${x.exp >= 0 ? "+" : ""}${x.exp.toFixed(2)}%`;
+  for (const [label, pick] of pops) {
+    const base = rows.filter(pick);
+    if (base.length < 10) { ctx.say(`  ${label}: n=${base.length}, too few for filters`); continue; }
+    const dates = [...new Set(base.map((r) => r.t.date))].sort();
+    const split = dates[Math.floor(dates.length / 2) - 1];
+    const halves = (rs: readonly T9Row[]): [Stat, Stat, Stat] => [stat(rs.map((r) => r.t)), stat(rs.filter((r) => r.t.date <= split).map((r) => r.t)), stat(rs.filter((r) => r.t.date > split).map((r) => r.t))];
+    const [ba, bs, bv] = halves(base);
+    ctx.say(`  ${label}: ${fmtStat(ba)}; halves ${sp(bs)} / ${sp(bv)} (split ${split})`);
+    for (const [fl, fn] of filters) {
+      const known = base.filter((r) => fn(r) !== null);
+      if (known.length === 0) { ctx.say(`    ${fl}: no data on this source`); continue; }
+      const kept = known.filter((r) => fn(r) === true);
+      const [fa, fs, fv] = halves(kept);
+      const pass = fa.n >= 30 && fa.exp > 0 && fa.pf >= 1.3 && fs.n > 0 && fv.n > 0 && fs.exp > bs.exp && fv.exp > bv.exp;
+      ctx.say(`    ${fl}: ${fmtStat(fa)}; halves ${sp(fs)} / ${sp(fv)}${known.length < base.length ? `; ${base.length - known.length} without data` : ""}: ${pass ? "IMPROVES (n >= 30, exp > 0, PF >= 1.3, beats the population in both halves)" : "no"}`);
+      if (pass) ctx.headlines.push({ id: "T9", label: `${fl} on ${label}`, n: fa.n, win: fa.win, exp: fa.exp, pf: fa.pf, selExp: fs.exp, valExp: fv.exp, verdict: "CANDIDATE (store validation pending)", date: etParts(ctx.now).date, source: ctx.args.source });
+    }
+  }
+}
+
+// ----- T10: earnings drift, swing (daily bars) -----
+async function theoryT10(ctx: Ctx): Promise<void> {
+  const universe = new Set(ctx.entries.slice(0, ctx.args.maxNames).map((e) => e.symbol));
+  ctx.say(`\n===== T10 Earnings drift (swing): reaction day +5%+ closing in the upper half of its range; long at the next open (after both candidate days when the report time is not supplied); hold 5 sessions (10 and 20 descriptive); stop on a close 2 ATR against =====`);
+  const spyDaily = await ctx.yahoo.fetch({ symbol: "SPY", interval: "1d", startMs: ctx.now - 425 * 86_400_000, endMs: ctx.now, includePrePost: false, cache: true });
+  const today = etParts(ctx.now).date;
+  const dates = spyDaily.map((b) => etParts(b.timestamp).date).filter((d) => d < today);
+  const daily = new Map<string, readonly Day[] | null>();
+  const dailyFor = async (sym: string): Promise<readonly Day[] | null> => {
+    if (daily.has(sym)) return daily.get(sym) ?? null;
+    let out: Day[] | null = null;
+    try {
+      const bars = await ctx.yahoo.fetch({ symbol: sym, interval: "1d", startMs: ctx.now - 425 * 86_400_000, endMs: ctx.now, includePrePost: false, cache: true });
+      out = bars.map((b) => ({ date: etParts(b.timestamp).date, open: b.open, high: b.high, low: b.low, close: b.close })).filter((d) => d.date < today);
+    } catch { out = null; }
+    daily.set(sym, out);
+    return out;
+  };
+  type Hold = 5 | 10 | 20;
+  const trades: Record<Hold, { long: (GapGoTrade & { react: number })[]; short: (GapGoTrade & { react: number })[] }> = { 5: { long: [], short: [] }, 10: { long: [], short: [] }, 20: { long: [], short: [] } };
+  const seen = new Set<string>();
+  let reporters = 0; let signals = 0;
+  for (let k = 0; k < dates.length; k++) {
+    const cal = (await fetchEarnings(dates[k])).filter((r) => universe.has(r.symbol));
+    await new Promise((res) => setTimeout(res, 120));
+    for (const r of cal) {
+      const days = await dailyFor(r.symbol);
+      if (!days) continue;
+      const j = days.findIndex((d) => d.date === dates[k]);
+      if (j < 15 || j + 2 >= days.length) continue;
+      const ret = (x: number): number => days[x].close / days[x - 1].close - 1;
+      let react: number; let entryIdx: number;
+      if (r.time === "pre-market") { react = j; entryIdx = j + 1; }
+      else if (r.time === "after-hours") { react = j + 1; entryIdx = j + 2; }
+      else { react = Math.abs(ret(j)) >= Math.abs(ret(j + 1)) ? j : j + 1; entryIdx = j + 2; }
+      const key = `${r.symbol}:${days[react].date}`;
+      if (seen.has(key) || entryIdx >= days.length) continue;
+      seen.add(key);
+      reporters++;
+      if (!ctx.inRange(days[entryIdx].date)) continue;
+      const d = days[react];
+      const loc = d.high > d.low ? (d.close - d.low) / (d.high - d.low) : 0.5;
+      const rr = ret(react) * 100;
+      const dir: "LONG" | "SHORT" | null = rr >= 5 && loc >= 0.5 ? "LONG" : rr <= -5 && loc <= 0.5 ? "SHORT" : null;
+      if (!dir) continue;
+      signals++;
+      const sign = dir === "LONG" ? 1 : -1;
+      const trs: number[] = [];
+      for (let x = react - 13; x <= react; x++) trs.push(Math.max(days[x].high - days[x].low, Math.abs(days[x].high - days[x - 1].close), Math.abs(days[x].low - days[x - 1].close)));
+      const atr = trs.reduce((a, b) => a + b, 0) / trs.length;
+      const entry = days[entryIdx].open * (1 + sign * ctx.slip);
+      const stop = entry - sign * 2 * atr;
+      for (const hold of [5, 10, 20] as const) {
+        const last = entryIdx + hold - 1;
+        if (last >= days.length) continue;
+        let exitPrice = days[last].close; let reason = "hold"; let exitDate = days[last].date;
+        for (let x = entryIdx; x <= last; x++) {
+          if (sign * (days[x].close - stop) < 0) { exitPrice = days[x].close; reason = "stop"; exitDate = days[x].date; break; }
+        }
+        const px = exitPrice * (1 - sign * ctx.slip);
+        const returnPct = sign * (px / entry - 1) * 100;
+        const trade: GapGoTrade & { react: number } = { symbol: r.symbol, date: days[entryIdx].date, direction: dir, gapPct: rr, above52w: false, entry, entryTime: "open", stop, atr, exits: [{ price: px, fraction: 1, reason, time: exitDate }], returnPct, rMultiple: returnPct / (2 * atr / entry * 100), pnlPer1000: returnPct * 10, react: rr };
+        (dir === "LONG" ? trades[hold].long : trades[hold].short).push(trade);
+      }
+    }
+    if ((k + 1) % 50 === 0) process.stdout.write(`  ${k + 1}/${dates.length} sessions, ${reporters} reporters, ${signals} signals\n`);
+  }
+  const months = Math.max(1, dates.length / 21);
+  ctx.say(`  ${reporters} earnings reactions in the universe over ${dates.length} sessions (${dates[0]} to ${dates[dates.length - 1]}); ${signals} signals, about ${(signals / months).toFixed(0)} a month`);
+  report(ctx, "long, reaction +5%+, hold 5 sessions", trades[5].long, true);
+  report(ctx, "long, reaction +5-10%, hold 5", trades[5].long.filter((t) => t.react < 10));
+  report(ctx, "long, reaction +10%+, hold 5", trades[5].long.filter((t) => t.react >= 10));
+  report(ctx, "long, hold 10 sessions", trades[10].long);
+  report(ctx, "long, hold 20 sessions", trades[20].long);
+  report(ctx, "short, reaction -5% or worse, hold 5 sessions (for the record)", trades[5].short);
+  report(ctx, "short, hold 10 sessions", trades[10].short);
+  report(ctx, "short, hold 20 sessions", trades[20].short);
+}
+
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   setLogLevel("error");
@@ -451,7 +623,7 @@ async function main(): Promise<void> {
   if (!uni) throw new Error("no universe file; run npm run universe:build");
   const ctx = new Ctx(args, uni.entries);
   const today = etParts(ctx.now).date;
-  const ids = args.id === "ALL" ? ["T1", "T2", "T3", "T4", "T6"] : args.id === "T7" ? ["T2", "T3"] : [args.id];
+  const ids = args.id === "ALL" ? ["T1", "T2", "T3", "T4", "T6", "T9", "T10"] : args.id === "T7" ? ["T2", "T3"] : [args.id];
   ctx.say(`Theory tests ${today}: source ${args.source}, window ${args.days} days (Yahoo) or the store${args.startDate || args.endDate ? `, sessions ${args.startDate ?? "start"} to ${args.endDate ?? "end"}` : ""}, slippage ${args.slipBps} bps/side, universe ${uni.entries.length} names (built ${uni.builtAt.slice(0, 10)})`);
   ctx.say(`Rule: first 5-minute close beyond the pre-market extreme (09:30 candle included) confirms; entry at the next candle's open; no signal after 11:30; skip if the open is ${OPEN_CHASE_PCT}% beyond the extreme; stop on a 5-minute close through the 09:30 candle's opposite extreme; half at 1 ATR, rest at 1.5 ATR; time exit 15:45. Pass: n >= 30, exp > 0, PF >= 1.3, both date halves positive.`);
   const started = Date.now();
@@ -462,6 +634,8 @@ async function main(): Promise<void> {
     else if (id === "T3") await theoryT3(ctx);
     else if (id === "T4") await theoryT4(ctx);
     else if (id === "T6") await theoryT6(ctx);
+    else if (id === "T9") await theoryT9(ctx);
+    else if (id === "T10") await theoryT10(ctx);
     else ctx.say(`unknown theory ${id}`);
   }
   ctx.say(`\n${((Date.now() - started) / 60_000).toFixed(1)} min`);

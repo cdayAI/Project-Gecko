@@ -229,7 +229,7 @@ above on that window alone.
 
 Result: pending the store run.
 
-## T9 Gap attribute filters (registered 2026-09-23 13:55 UTC, before running)
+## T9 Gap attribute filters (registered 2026-09-23 14:01 UTC, before running)
 
 Question: which observable facts at the time of entry separate the gap
 trades that work from the ones that do not. Population: every pre-market
@@ -256,7 +256,7 @@ a pass here is a candidate, and only a pass on the store sessions before
 
 Result: pending.
 
-## T10 Earnings drift, swing (registered 2026-09-23 13:55 UTC, before running)
+## T10 Earnings drift, swing (registered 2026-09-23 14:01 UTC, before running)
 
 Statement: after a scheduled earnings report, a reaction day of +5% or
 more that closes in the upper half of its range keeps drifting: long at
