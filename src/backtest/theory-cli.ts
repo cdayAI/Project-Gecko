@@ -665,7 +665,8 @@ async function main(): Promise<void> {
   if (!uni) throw new Error("no universe file; run npm run universe:build");
   const ctx = new Ctx(args, uni.entries);
   const today = etParts(ctx.now).date;
-  const ids = args.id === "ALL" ? ["T1", "T2", "T3", "T4", "T6", "T9", "T10", "T11"] : args.id === "T7" ? ["T2", "T3"] : [args.id];
+  // "all" is the intraday theories, the ones the Schwab store can answer; T10 and T11 read Yahoo daily bars on any source and run by id.
+  const ids = args.id === "ALL" ? ["T1", "T2", "T3", "T4", "T6", "T9"] : args.id === "T7" ? ["T2", "T3"] : [args.id];
   ctx.say(`Theory tests ${today}: source ${args.source}, window ${args.days} days (Yahoo) or the store${args.startDate || args.endDate ? `, sessions ${args.startDate ?? "start"} to ${args.endDate ?? "end"}` : ""}, slippage ${args.slipBps} bps/side, universe ${uni.entries.length} names (built ${uni.builtAt.slice(0, 10)})`);
   ctx.say(`Rule: first 5-minute close beyond the pre-market extreme (09:30 candle included) confirms; entry at the next candle's open; no signal after 11:30; skip if the open is ${OPEN_CHASE_PCT}% beyond the extreme; stop on a 5-minute close through the 09:30 candle's opposite extreme; half at 1 ATR, rest at 1.5 ATR; time exit 15:45. Pass: n >= 30, exp > 0, PF >= 1.3, both date halves positive.`);
   const started = Date.now();

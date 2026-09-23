@@ -345,6 +345,11 @@ npm run theory -- --id T2 --source store --end-date 2026-07-24
 npm run theory -- --id T3 --source store --end-date 2026-07-24
 ```
 
+Shortcut: `npm run theory -- --id all --source store`, then the same with
+`--end-date 2026-07-24`, runs every intraday theory (T1, T2, T3, T4, T6,
+T9) on the store. T10 and T11 read Yahoo daily bars whatever the source,
+so they run here, not on the store.
+
 Results land in docs/results/ and the evening push carries them. T4 with
 the end date is the T5 validation; the other three simply have more
 sessions than Yahoo can give.
