@@ -199,9 +199,13 @@ function theoryLines(): string[] {
   let rows: TheoryHeadline[] = [];
   try { if (fs.existsSync(f)) rows = JSON.parse(fs.readFileSync(f, "utf-8")) as TheoryHeadline[]; } catch { rows = []; }
   if (rows.length === 0) return ["Tested base rates: none recorded yet (npm run theory)."];
-  const tagFor: Record<string, string> = { T1: "CONT tags (day-2 continuation)", T2: "mega-cap gaps 3%+ above the 20-day high with the sector green", T3: "ER tags (earnings gaps)", T4: "AH tags (after-hours movers)" };
+  const tagFor: Record<string, string> = {
+    T1: "CONT tags (day-2 continuation)", T2: "mega-cap gaps 3%+ above the 20-day high with the sector green", T3: "ER tags (earnings gaps)",
+    T4: "AH tags (after-hours movers)", T6: "fading failed gaps", T7: "exit variants", T9: "gap filters", T10: "ER tags, swing (earnings drift)",
+  };
   const out = ["Tested base rates (docs/theories.md; a PASS is a forward-test hypothesis, not an edge):"];
-  for (const id of ["T4", "T3", "T1", "T2"]) {
+  const ids = [...new Set(rows.map((r) => r.id))].sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)));
+  for (const id of ids) {
     const hs = rows.filter((r) => r.id === id);
     if (hs.length === 0) continue;
     for (const h of hs) out.push(`- ${id} ${tagFor[id] ?? ""}, ${h.label}: n=${h.n}, win ${h.win.toFixed(0)}%, ${h.exp >= 0 ? "+" : ""}${h.exp.toFixed(2)}%/trade, PF ${h.pf.toFixed(2)}, ${h.verdict} (${h.source}, ${h.date})`);
