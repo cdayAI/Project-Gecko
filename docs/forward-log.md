@@ -44,8 +44,8 @@ CONFIRMED star, GAPPED but not star with the reason, NO GAP, NEW), pushes
 it to `codex/daily-YYYY-MM-DD`, then starts the live monitor at 09:30 in
 the same window. Say "packet is up". Files: `README.md` (validation
 table, star rows, other gap rows, Jev status, forward-log summary),
-`scan-gap.txt`, `news.md`, `jev.md`, and `live.txt`, rewritten every 30
-seconds by the monitor.
+`scan-gap.txt`, `news.md`, `jev.md`. The monitor's `live.txt` stays
+local (gitignored); the scorecard is the committed record.
 
 ## During the session
 
@@ -78,8 +78,9 @@ logged by hand, show what slippage and discretion add or cost.
 
 ## After the close
 
-The evening command carries `live.txt`, so the partner writes the log
-records from the monitor's entries and exits plus the fills you report.
+The evening command scores the day's calls (the scorecard section above)
+and pushes the result, so the paper record writes itself; you add only
+real fills.
 Send fills as symbol, side, size, entry and exit prices with times. The
 log commands remain for anything manual:
 
