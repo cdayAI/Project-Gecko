@@ -214,11 +214,13 @@ earnings names.
 
 Statement: in names with 20-day dollar volume of $1B or more, every
 pre-market gap up of 2% or more, with no structure or sector filter,
-is positive under the registered rule, and more so held to 15:45. Found
-post hoc in the T2 rerun on the Yahoo window (n=158, 52.5% win,
-+0.58%/trade, PF 1.64, halves +0.52% / +0.62%; held to 15:45 n=158,
-+0.88%, PF 1.80 by the same run's variant lines), so that window cannot
-count.
+is positive under the registered rule. Found post hoc in the T2 rerun on
+the Yahoo window (n=158, 52.5% win, +0.58%/trade, PF 1.64, halves +0.52%
+/ +0.62%), so that window cannot count. Correction (2026-09-23): an
+earlier version of this entry quoted a hold-to-15:45 figure for this
+line (+0.88%, PF 1.80); no such line was computed, the T7 variants ran
+only on the 3%+ populations. From 2026-09-23 the T2 output includes the
+hold variant for the 2%+ line.
 
 Validation: the store, sessions on or before 2026-07-24 only:
 `npm run theory -- --id T2 --source store --end-date 2026-07-24`, read
@@ -226,6 +228,51 @@ Validation: the store, sessions on or before 2026-07-24 only:
 above on that window alone.
 
 Result: pending the store run.
+
+## T9 Gap attribute filters (registered 2026-09-23 13:55 UTC, before running)
+
+Question: which observable facts at the time of entry separate the gap
+trades that work from the ones that do not. Population: every pre-market
+gap of 3% or more in the universe, replayed with the registered rule
+(long for gaps up, short for gaps down, half at 1 ATR, rest at 1.5 ATR),
+reported by population: long 3-5%, 5-10%, 10%+, the star spec; short
+3-5%, 5-10%, 10%+. Six filters, each applied alone:
+
+- F1 stop within 1 ATR of the entry (the 09:30 candle's opposite extreme
+  is at most 1 ATR away; ONON on 2026-09-22 was 1.9 ATR)
+- F2 the 09:30 candle's volume at least 3x an average 5-minute bar of the
+  prior five sessions
+- F3 SPY moving with the trade at entry (above its 09:30 open for a long)
+- F4 entry by 09:45
+- F5 the 09:30 candle closed in its top third (bottom third for shorts)
+- F6 pre-market volume at least 10% of an average day's volume (the
+  store only; Yahoo carries no pre-market volume)
+
+Pass for a filter on a population: filtered n >= 30, expectancy > 0,
+PF >= 1.3, and filtered expectancy above the unfiltered population's in
+both date halves. 42 filter lines are run, so some will pass by chance:
+a pass here is a candidate, and only a pass on the store sessions before
+2026-07-25 (`--end-date 2026-07-24`) puts a filter on the scanner.
+
+Result: pending.
+
+## T10 Earnings drift, swing (registered 2026-09-23 13:55 UTC, before running)
+
+Statement: after a scheduled earnings report, a reaction day of +5% or
+more that closes in the upper half of its range keeps drifting: long at
+the next session's open, held 5 sessions, is positive (post-earnings
+announcement drift). Reaction day: the report date when the report was
+before the open, the next session when after the close; when the time is
+not supplied, the larger of the two days' moves, with entry at the open
+after both days so the choice uses no future data. Stop on a close
+2 ATR against the entry. Daily bars (Yahoo, about 14 months) and the
+Nasdaq calendar for every session in that span; 10 bps per side.
+
+Metric: headline "long, reaction +5%+, hold 5 sessions"; 10- and
+20-session holds and reaction-size buckets descriptive; the short mirror
+(-5% or worse, closing in the lower half) for the record.
+
+Result: pending.
 
 ## Operator store runs (149 sessions of Schwab bars, on the operator's machine)
 
