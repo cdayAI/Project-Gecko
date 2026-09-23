@@ -530,8 +530,10 @@ async function theoryT9(ctx: Ctx): Promise<void> {
       if (known.length === 0) { ctx.say(`    ${fl}: no data on this source`); continue; }
       const kept = known.filter((r) => fn(r) === true);
       const [fa, fs, fv] = halves(kept);
-      const pass = fa.n >= 30 && fa.exp > 0 && fa.pf >= 1.3 && fs.n > 0 && fv.n > 0 && fs.exp > bs.exp && fv.exp > bv.exp;
-      ctx.say(`    ${fl}: ${fmtStat(fa)}; halves ${sp(fs)} / ${sp(fv)}${known.length < base.length ? `; ${base.length - known.length} without data` : ""}: ${pass ? "IMPROVES (n >= 30, exp > 0, PF >= 1.3, beats the population in both halves)" : "no"}`);
+      // Registered rule (2026-09-23 14:01 UTC) plus one tightening made after the first run: both filtered halves must also be positive.
+      const beats = fa.n >= 30 && fa.exp > 0 && fa.pf >= 1.3 && fs.n > 0 && fv.n > 0 && fs.exp > bs.exp && fv.exp > bv.exp;
+      const pass = beats && fs.exp > 0 && fv.exp > 0;
+      ctx.say(`    ${fl}: ${fmtStat(fa)}; halves ${sp(fs)} / ${sp(fv)}${known.length < base.length ? `; ${base.length - known.length} without data` : ""}: ${pass ? "IMPROVES (n >= 30, exp > 0, PF >= 1.3, beats the population in both halves, both halves positive)" : beats ? "beats the population but a half still loses: no" : "no"}`);
       if (pass) ctx.headlines.push({ id: "T9", label: `${fl} on ${label}`, n: fa.n, win: fa.win, exp: fa.exp, pf: fa.pf, selExp: fs.exp, valExp: fv.exp, verdict: "CANDIDATE (store validation pending)", date: etParts(ctx.now).date, source: ctx.args.source });
     }
   }

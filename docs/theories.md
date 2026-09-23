@@ -254,7 +254,35 @@ both date halves. 42 filter lines are run, so some will pass by chance:
 a pass here is a candidate, and only a pass on the store sessions before
 2026-07-25 (`--end-date 2026-07-24`) puts a filter on the scanner.
 
-Result: pending.
+Tightened after the first run (stricter only): a filter must also be
+positive in both of its own halves. As registered, two lines on 5-10%
+longs passed while their second halves still lost money.
+
+Result (2026-09-23, Yahoo, sessions 2026-08-14 to 2026-09-22, 1,500
+names, 10 bps): 972 rule trades from gaps of 3%+. The window is a strong
+rally, which flatters every long line and penalises every short line;
+read the filters against their own population, not the base rates.
+
+- Long 3-5% (n=367, 48.0% win, +0.29%, PF 1.29, halves +0.01% / +0.47%):
+  three candidates. F1 stop within 1 ATR n=349, +0.38%, PF 1.40, halves
+  +0.08% / +0.57%. F2 heavy 09:30 volume n=314, +0.42%, PF 1.43, halves
+  +0.15% / +0.60%. F4 entry by 09:45 n=243, +0.47%, PF 1.46, halves
+  +0.06% / +0.82%. They overlap heavily (the same trades with a few bad
+  ones removed), so they are one finding, not three.
+- Long 5-10% (n=110, halves +0.77% / -0.36%): F4 (+0.60%, halves +1.05% /
+  -0.14%) and F5 (+0.56%, halves +1.35% / -0.16%) beat the population in
+  both halves but still lose in the second: not qualified.
+- Long 10%+: 14 trades (star spec 9), too few for filters.
+- Shorts 3-10%: every line negative and no filter rescues them. Short
+  10%+: n=20, 55% win, +1.10%, PF 1.70, both halves positive with no
+  filter, the same shape as the T3 and T5 observations (large gap-downs
+  keep falling). Too few to count.
+- F3 (SPY moving with the trade) improved nothing that had enough trades.
+- F6 has no data on Yahoo; the store run gives it its first reading.
+
+Next: `npm run theory -- --id T9 --source store --end-date 2026-07-24`
+decides F1, F2 and F4 on 3-5% longs on sessions this window never saw.
+File: docs/results/theory-t9-2026-09-23-yahoo.txt.
 
 ## T10 Earnings drift, swing (registered 2026-09-23 14:01 UTC, before running)
 
