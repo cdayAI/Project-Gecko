@@ -311,7 +311,7 @@ market direction, not earnings drift. Shorts lost overall (-0.70%, PF
 0.77), again only in the rising half. Follow-up registered as T11. File:
 docs/results/theory-t10-2026-09-23-yahoo.txt.
 
-## T11 Earnings drift in an uptrend (registered 2026-09-23 14:30 UTC, after T10, before running)
+## T11 Earnings drift in an uptrend (registered 2026-09-23 14:27 UTC, after T10, before running)
 
 Statement: T10's long drift lost from July 2025 to March 2026 and paid
 from March to September 2026, a rising market. Hypothesis: the drift pays

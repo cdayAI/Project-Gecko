@@ -539,26 +539,36 @@ async function theoryT9(ctx: Ctx): Promise<void> {
   }
 }
 
-// ----- T10: earnings drift, swing (daily bars) -----
-async function theoryT10(ctx: Ctx): Promise<void> {
+// ----- T10 / T11: earnings drift, swing (daily bars) -----
+interface DriftTrade extends GapGoTrade { readonly react: number; readonly hold: 5 | 10 | 20; readonly spyUp: boolean | null }
+
+// Every earnings reaction in the universe over the lookback, with the T10
+// entry, exits for 5-, 10- and 20-session holds, and whether SPY closed above
+// its 50-day average on the reaction day.
+async function collectDrift(ctx: Ctx, lookbackDays: number): Promise<{ trades: DriftTrade[]; dates: string[]; reporters: number; signals: number }> {
   const universe = new Set(ctx.entries.slice(0, ctx.args.maxNames).map((e) => e.symbol));
-  ctx.say(`\n===== T10 Earnings drift (swing): reaction day +5%+ closing in the upper half of its range; long at the next open (after both candidate days when the report time is not supplied); hold 5 sessions (10 and 20 descriptive); stop on a close 2 ATR against =====`);
-  const spyDaily = await ctx.yahoo.fetch({ symbol: "SPY", interval: "1d", startMs: ctx.now - 425 * 86_400_000, endMs: ctx.now, includePrePost: false, cache: true });
   const today = etParts(ctx.now).date;
-  const dates = spyDaily.map((b) => etParts(b.timestamp).date).filter((d) => d < today);
+  const spyDaily = await ctx.yahoo.fetch({ symbol: "SPY", interval: "1d", startMs: ctx.now - (lookbackDays + 90) * 86_400_000, endMs: ctx.now, includePrePost: false, cache: true });
+  const spyDays = spyDaily.map((b) => ({ date: etParts(b.timestamp).date, close: b.close })).filter((d) => d.date < today);
+  const spyUpOn = new Map<string, boolean>();
+  for (let i = 49; i < spyDays.length; i++) {
+    const sma = spyDays.slice(i - 49, i + 1).reduce((a, d) => a + d.close, 0) / 50;
+    spyUpOn.set(spyDays[i].date, spyDays[i].close > sma);
+  }
+  const firstDate = etParts(ctx.now - lookbackDays * 86_400_000).date;
+  const dates = spyDays.map((d) => d.date).filter((d) => d >= firstDate);
   const daily = new Map<string, readonly Day[] | null>();
   const dailyFor = async (sym: string): Promise<readonly Day[] | null> => {
     if (daily.has(sym)) return daily.get(sym) ?? null;
     let out: Day[] | null = null;
     try {
-      const bars = await ctx.yahoo.fetch({ symbol: sym, interval: "1d", startMs: ctx.now - 425 * 86_400_000, endMs: ctx.now, includePrePost: false, cache: true });
+      const bars = await ctx.yahoo.fetch({ symbol: sym, interval: "1d", startMs: ctx.now - (lookbackDays + 30) * 86_400_000, endMs: ctx.now, includePrePost: false, cache: true });
       out = bars.map((b) => ({ date: etParts(b.timestamp).date, open: b.open, high: b.high, low: b.low, close: b.close })).filter((d) => d.date < today);
     } catch { out = null; }
     daily.set(sym, out);
     return out;
   };
-  type Hold = 5 | 10 | 20;
-  const trades: Record<Hold, { long: (GapGoTrade & { react: number })[]; short: (GapGoTrade & { react: number })[] }> = { 5: { long: [], short: [] }, 10: { long: [], short: [] }, 20: { long: [], short: [] } };
+  const trades: DriftTrade[] = [];
   const seen = new Set<string>();
   let reporters = 0; let signals = 0;
   for (let k = 0; k < dates.length; k++) {
@@ -600,22 +610,52 @@ async function theoryT10(ctx: Ctx): Promise<void> {
         }
         const px = exitPrice * (1 - sign * ctx.slip);
         const returnPct = sign * (px / entry - 1) * 100;
-        const trade: GapGoTrade & { react: number } = { symbol: r.symbol, date: days[entryIdx].date, direction: dir, gapPct: rr, above52w: false, entry, entryTime: "open", stop, atr, exits: [{ price: px, fraction: 1, reason, time: exitDate }], returnPct, rMultiple: returnPct / (2 * atr / entry * 100), pnlPer1000: returnPct * 10, react: rr };
-        (dir === "LONG" ? trades[hold].long : trades[hold].short).push(trade);
+        trades.push({ symbol: r.symbol, date: days[entryIdx].date, direction: dir, gapPct: rr, above52w: false, entry, entryTime: "open", stop, atr, exits: [{ price: px, fraction: 1, reason, time: exitDate }], returnPct, rMultiple: returnPct / (2 * atr / entry * 100), pnlPer1000: returnPct * 10, react: rr, hold, spyUp: spyUpOn.get(d.date) ?? null });
       }
     }
-    if ((k + 1) % 50 === 0) process.stdout.write(`  ${k + 1}/${dates.length} sessions, ${reporters} reporters, ${signals} signals\n`);
+    if ((k + 1) % 100 === 0) process.stdout.write(`  ${k + 1}/${dates.length} sessions, ${reporters} reporters, ${signals} signals\n`);
   }
+  return { trades, dates, reporters, signals };
+}
+
+async function theoryT10(ctx: Ctx): Promise<void> {
+  ctx.say(`\n===== T10 Earnings drift (swing): reaction day +5%+ closing in the upper half of its range; long at the next open (after both candidate days when the report time is not supplied); hold 5 sessions (10 and 20 descriptive); stop on a close 2 ATR against =====`);
+  const { trades, dates, reporters, signals } = await collectDrift(ctx, 425);
   const months = Math.max(1, dates.length / 21);
   ctx.say(`  ${reporters} earnings reactions in the universe over ${dates.length} sessions (${dates[0]} to ${dates[dates.length - 1]}); ${signals} signals, about ${(signals / months).toFixed(0)} a month`);
-  report(ctx, "long, reaction +5%+, hold 5 sessions", trades[5].long, true);
-  report(ctx, "long, reaction +5-10%, hold 5", trades[5].long.filter((t) => t.react < 10));
-  report(ctx, "long, reaction +10%+, hold 5", trades[5].long.filter((t) => t.react >= 10));
-  report(ctx, "long, hold 10 sessions", trades[10].long);
-  report(ctx, "long, hold 20 sessions", trades[20].long);
-  report(ctx, "short, reaction -5% or worse, hold 5 sessions (for the record)", trades[5].short);
-  report(ctx, "short, hold 10 sessions", trades[10].short);
-  report(ctx, "short, hold 20 sessions", trades[20].short);
+  const pick = (dir: "LONG" | "SHORT", hold: 5 | 10 | 20): DriftTrade[] => trades.filter((t) => t.direction === dir && t.hold === hold);
+  report(ctx, "long, reaction +5%+, hold 5 sessions", pick("LONG", 5), true);
+  report(ctx, "long, reaction +5-10%, hold 5", pick("LONG", 5).filter((t) => t.react < 10));
+  report(ctx, "long, reaction +10%+, hold 5", pick("LONG", 5).filter((t) => t.react >= 10));
+  report(ctx, "long, hold 10 sessions", pick("LONG", 10));
+  report(ctx, "long, hold 20 sessions", pick("LONG", 20));
+  report(ctx, "short, reaction -5% or worse, hold 5 sessions (for the record)", pick("SHORT", 5));
+  report(ctx, "short, hold 10 sessions", pick("SHORT", 10));
+  report(ctx, "short, hold 20 sessions", pick("SHORT", 20));
+}
+
+// T11: the T10 long signal only when SPY closed above its 50-day on the
+// reaction day; validated on 2023-01-03 to 2025-07-24, which T10 never saw.
+async function theoryT11(ctx: Ctx): Promise<void> {
+  const VALIDATION_START = "2023-01-03";
+  const VALIDATION_END = "2025-07-24";
+  ctx.say(`\n===== T11 Earnings drift in an uptrend: T10's long signal, 5-session hold, only when SPY closed above its 50-day on the reaction day; unseen window ${VALIDATION_START} to ${VALIDATION_END} =====`);
+  const lookback = Math.ceil((ctx.now - Date.parse(`${VALIDATION_START}T12:00:00Z`)) / 86_400_000) + 5;
+  const { trades, dates, reporters, signals } = await collectDrift(ctx, lookback);
+  ctx.say(`  ${reporters} earnings reactions over ${dates.length} sessions (${dates[0]} to ${dates[dates.length - 1]}); ${signals} signals`);
+  const long5 = trades.filter((t) => t.direction === "LONG" && t.hold === 5);
+  const unseen = long5.filter((t) => t.date >= VALIDATION_START && t.date <= VALIDATION_END);
+  const seen = long5.filter((t) => t.date > VALIDATION_END);
+  ctx.say(`  Unseen window (${VALIDATION_START} to ${VALIDATION_END}):`);
+  report(ctx, "  unfiltered T10 rule", unseen, false);
+  report(ctx, "  SPY above its 50-day (the T11 rule)", unseen.filter((t) => t.spyUp === true), true);
+  report(ctx, "  SPY below its 50-day (for reference)", unseen.filter((t) => t.spyUp === false));
+  ctx.say(`  T10 window (${VALIDATION_END} onward, seen when the rule was formed; reference only):`);
+  report(ctx, "  unfiltered T10 rule", seen);
+  report(ctx, "  SPY above its 50-day", seen.filter((t) => t.spyUp === true));
+  report(ctx, "  SPY below its 50-day", seen.filter((t) => t.spyUp === false));
+  const f = stat(unseen.filter((t) => t.spyUp === true)); const u = stat(unseen);
+  ctx.say(`  T11 against the unfiltered rule on the unseen window: ${f.exp >= 0 ? "+" : ""}${f.exp.toFixed(2)}% vs ${u.exp >= 0 ? "+" : ""}${u.exp.toFixed(2)}% per trade (${f.exp > u.exp ? "better" : "not better"})`);
 }
 
 async function main(): Promise<void> {
@@ -625,7 +665,7 @@ async function main(): Promise<void> {
   if (!uni) throw new Error("no universe file; run npm run universe:build");
   const ctx = new Ctx(args, uni.entries);
   const today = etParts(ctx.now).date;
-  const ids = args.id === "ALL" ? ["T1", "T2", "T3", "T4", "T6", "T9", "T10"] : args.id === "T7" ? ["T2", "T3"] : [args.id];
+  const ids = args.id === "ALL" ? ["T1", "T2", "T3", "T4", "T6", "T9", "T10", "T11"] : args.id === "T7" ? ["T2", "T3"] : [args.id];
   ctx.say(`Theory tests ${today}: source ${args.source}, window ${args.days} days (Yahoo) or the store${args.startDate || args.endDate ? `, sessions ${args.startDate ?? "start"} to ${args.endDate ?? "end"}` : ""}, slippage ${args.slipBps} bps/side, universe ${uni.entries.length} names (built ${uni.builtAt.slice(0, 10)})`);
   ctx.say(`Rule: first 5-minute close beyond the pre-market extreme (09:30 candle included) confirms; entry at the next candle's open; no signal after 11:30; skip if the open is ${OPEN_CHASE_PCT}% beyond the extreme; stop on a 5-minute close through the 09:30 candle's opposite extreme; half at 1 ATR, rest at 1.5 ATR; time exit 15:45. Pass: n >= 30, exp > 0, PF >= 1.3, both date halves positive.`);
   const started = Date.now();
@@ -638,6 +678,7 @@ async function main(): Promise<void> {
     else if (id === "T6") await theoryT6(ctx);
     else if (id === "T9") await theoryT9(ctx);
     else if (id === "T10") await theoryT10(ctx);
+    else if (id === "T11") await theoryT11(ctx);
     else ctx.say(`unknown theory ${id}`);
   }
   ctx.say(`\n${((Date.now() - started) / 60_000).toFixed(1)} min`);
