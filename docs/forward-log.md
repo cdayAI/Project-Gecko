@@ -62,6 +62,20 @@ paper only. `--once` prints one snapshot; `--symbols ONON,ECO` narrows it
 or adds names that are not in the packet; `--interval 20` refreshes
 faster. It never places orders.
 
+## Scorecard (automatic)
+
+Every call the morning packet makes is scored after the close:
+`npm run score` (the evening command runs it for the day) replays each
+row of `docs/daily/<date>/scan-gap.txt` with the tested rule on the day's
+5-minute bars and writes the triggered calls to
+`docs/log/auto/<date>.jsonl` and the full call sheet, triggered or not,
+to `docs/daily/<date>/score.md`, with the running record across every
+scored session. Prices are the rule's, without slippage; star, large and
+watch rows take half at 1 ATR and the rest at 1.5 ATR; mega-cap rows hold
+to 15:45. `npm run log -- report` includes them as "Gecko calls". This
+is the record to judge the system by before sizing up; your real fills,
+logged by hand, show what slippage and discretion add or cost.
+
 ## After the close
 
 The evening command carries `live.txt`, so the partner writes the log

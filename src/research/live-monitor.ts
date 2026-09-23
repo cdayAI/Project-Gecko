@@ -25,11 +25,12 @@ import type { SchwabRest } from "../brokers/schwab/rest.js";
 import { etParts } from "../utils/time.js";
 import { schwabSession, parseProvider, type ProviderChoice } from "./schwab-session.js";
 import { loadUniverse } from "./universe.js";
+import { readScanGap } from "./packet-rows.js";
 
 const log = createLogger("live-monitor");
 
 interface Args { readonly provider: ProviderChoice; readonly once: boolean; readonly interval: number; readonly symbols: readonly string[] | null; readonly date: string }
-interface Row { readonly symbol: string; readonly star: boolean; readonly side: "long" | "short"; readonly pmHigh: number; readonly pmLow: number; readonly atr: number; readonly source: string }
+interface Row { readonly symbol: string; readonly star: boolean; readonly side: "long" | "short"; readonly pmHigh: number; readonly pmLow: number; readonly atr: number; readonly source: string; readonly tier: string; readonly hold: boolean }
 interface Minute { readonly ts: number; readonly o: number; readonly h: number; readonly l: number; readonly c: number; readonly v: number }
 interface Candle { readonly t: number; o: number; h: number; l: number; c: number; v: number }   // t = candle start, minutes after midnight ET
 interface Status { readonly line: string; readonly events: readonly string[] }
@@ -55,25 +56,13 @@ function parseArgs(argv: readonly string[]): Args {
   return out;
 }
 
-// Rows from the morning packet: symbol, star, side (table), PM high/low, ATR.
+// Rows from the morning packet (shared parser, src/research/packet-rows.ts).
+// Mega-cap rows hold to 15:45 (T7); every other row takes half at 1 ATR and
+// the rest at 1.5 ATR, as registered.
 function loadPacketRows(date: string): Row[] {
-  const file = path.join("docs", "daily", date, "scan-gap.txt");
-  if (!fs.existsSync(file)) return [];
-  const rows: Row[] = [];
-  let side: "long" | "short" | null = null;
-  for (const line of fs.readFileSync(file, "utf-8").split("\n")) {
-    const h = line.match(/^GAP (UP|DOWN): /);
-    if (h) { side = h[1] === "UP" ? "long" : "short"; continue; }
-    if (!side) continue;
-    const m = line.match(/^\s{1,3}(\*?)([A-Z]{1,5})\s+/);
-    if (!m) continue;
-    // Sym Pre-mkt Gap% PMvol PMhigh PMlow 20dhi 52whi >20d >52w <20dLo ATR ...
-    const tok = line.trim().split(/\s+/);
-    const pmHigh = Number(tok[4]); const pmLow = Number(tok[5]); const atr = Number(tok[11]);
-    if (![pmHigh, pmLow, atr].every((n) => Number.isFinite(n) && n > 0)) continue;
-    rows.push({ symbol: m[2], star: m[1] === "*", side, pmHigh, pmLow, atr, source: `packet ${date}` });
-  }
-  return rows;
+  const scan = readScanGap(date);
+  if (!scan) return [];
+  return scan.rows.map((r) => ({ symbol: r.symbol, star: r.star, side: r.side, pmHigh: r.pmHigh, pmLow: r.pmLow, atr: r.atr, source: `packet ${date}`, tier: r.tier, hold: r.tier === "mega" }));
 }
 
 function midnightEt(now: number): number {
@@ -139,7 +128,7 @@ async function describeExtra(rest: SchwabRest | null, yahoo: YahooHistoricalBars
   const atr = loadUniverse()?.entries.find((e) => e.symbol === symbol)?.atr14 ?? 0;
   const last = pre[pre.length - 1].c;
   return {
-    symbol, star: false, side: priorClose > 0 && last < priorClose ? "short" : "long",
+    symbol, star: false, tier: "extra", hold: false, side: priorClose > 0 && last < priorClose ? "short" : "long",
     pmHigh: Math.max(...pre.map((m) => m.h)), pmLow: Math.min(...pre.map((m) => m.l)), atr,
     source: priorClose > 0 ? `bars (prior close ${priorClose.toFixed(2)})` : "bars (prior close unknown, treated as long)",
   };
@@ -182,24 +171,24 @@ function evaluate(row: Row, candles: readonly Candle[], nowMin: number): Status 
         const next = candles.find((x) => x.t === c.t + 5);
         const price = next ? next.o : c.c;
         entry = { price, t: c.t + 5 };
-        events.push(`${hhmm(c.t + 5)} ENTRY ${row.side} ${price.toFixed(2)} (${hhmm(c.t)} candle closed ${c.c.toFixed(2)}, ${long ? "above" : "below"} ${ext.toFixed(2)}); stop ${stopRef.toFixed(2)} on a 5m close; T1 ${t1(price).toFixed(2)} T2 ${t2(price).toFixed(2)}`);
+        events.push(`${hhmm(c.t + 5)} ENTRY ${row.side} ${price.toFixed(2)} (${hhmm(c.t)} candle closed ${c.c.toFixed(2)}, ${long ? "above" : "below"} ${ext.toFixed(2)}); stop ${stopRef.toFixed(2)} on a 5m close; ${row.hold ? "hold to 15:45" : `T1 ${t1(price).toFixed(2)} T2 ${t2(price).toFixed(2)}`}`);
       }
       continue;
     }
     if (long ? c.c < stopRef : c.c > stopRef) { exit = { price: c.c, t: c.t + 5, reason: "stop" }; events.push(`${hhmm(c.t + 5)} STOP ${c.c.toFixed(2)} (5m close through ${stopRef.toFixed(2)})`); break; }
-    if (!half && (long ? c.h >= t1(entry.price) : c.l <= t1(entry.price))) { half = true; events.push(`${hhmm(c.t)} HALF ${t1(entry.price).toFixed(2)} (1 ATR)`); }
-    if (half && (long ? c.h >= t2(entry.price) : c.l <= t2(entry.price))) { exit = { price: t2(entry.price), t: c.t + 5, reason: "target2" }; events.push(`${hhmm(c.t)} REST ${exit.price.toFixed(2)} (1.5 ATR)`); break; }
+    if (!row.hold && !half && (long ? c.h >= t1(entry.price) : c.l <= t1(entry.price))) { half = true; events.push(`${hhmm(c.t)} HALF ${t1(entry.price).toFixed(2)} (1 ATR)`); }
+    if (!row.hold && half && (long ? c.h >= t2(entry.price) : c.l <= t2(entry.price))) { exit = { price: t2(entry.price), t: c.t + 5, reason: "target2" }; events.push(`${hhmm(c.t)} REST ${exit.price.toFixed(2)} (1.5 ATR)`); break; }
     if (c.t + 5 >= TIME_EXIT_MIN) { exit = { price: c.c, t: c.t + 5, reason: "time" }; events.push(`${hhmm(c.t + 5)} TIME EXIT ${c.c.toFixed(2)}`); break; }
   }
   const move = (p: number, e: number): number => ((long ? p - e : e - p) / e) * 100;
   if (!entry) {
     const away = pct(long ? ext : last.c, long ? last.c : ext);
-    return { line: `WAITING for a 5m close ${long ? "above" : "below"} ${ext.toFixed(2)} (last ${last.c.toFixed(2)}, ${away} away); stop ref ${stopRef.toFixed(2)}; targets ${long ? "+" : "-"}${row.atr.toFixed(2)} half, ${long ? "+" : "-"}${(1.5 * row.atr).toFixed(2)} rest`, events };
+    return { line: `WAITING for a 5m close ${long ? "above" : "below"} ${ext.toFixed(2)} (last ${last.c.toFixed(2)}, ${away} away); stop ref ${stopRef.toFixed(2)}; ${row.hold ? "hold to 15:45 once in" : `targets ${long ? "+" : "-"}${row.atr.toFixed(2)} half, ${long ? "+" : "-"}${(1.5 * row.atr).toFixed(2)} rest`}`, events };
   }
   if (!exit) {
     const open1 = move(last.c, entry.price);
     const pnl = half ? 0.5 * move(t1(entry.price), entry.price) + 0.5 * open1 : open1;
-    return { line: `IN ${row.side} from ${entry.price.toFixed(2)} at ${hhmm(entry.t)}; stop ${stopRef.toFixed(2)} (5m close); T1 ${t1(entry.price).toFixed(2)}${half ? " taken" : ""}; T2 ${t2(entry.price).toFixed(2)}; last ${last.c.toFixed(2)} ${open1 >= 0 ? "+" : ""}${open1.toFixed(2)}% (position ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}%)`, events };
+    return { line: `IN ${row.side} from ${entry.price.toFixed(2)} at ${hhmm(entry.t)}; stop ${stopRef.toFixed(2)} (5m close); ${row.hold ? "hold to 15:45" : `T1 ${t1(entry.price).toFixed(2)}${half ? " taken" : ""}; T2 ${t2(entry.price).toFixed(2)}`}; last ${last.c.toFixed(2)} ${open1 >= 0 ? "+" : ""}${open1.toFixed(2)}% (position ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}%)`, events };
   }
   const pnl = half ? 0.5 * move(t1(entry.price), entry.price) + 0.5 * move(exit.price, entry.price) : move(exit.price, entry.price);
   return { line: `DONE (${exit.reason}) ${row.side} ${entry.price.toFixed(2)} -> ${exit.price.toFixed(2)} at ${hhmm(exit.t)}: ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}%${half ? " incl. half at T1" : ""}`, events };
@@ -245,7 +234,7 @@ async function snapshot(rest: SchwabRest | null, yahoo: YahooHistoricalBars, row
       const st = evaluate(row, candles, nowMin);
       const last = candles[candles.length - 1];
       lines.push(`${row.star ? "*" : " "}${row.symbol.padEnd(5)} ${row.side.padEnd(5)} PM ${row.pmHigh.toFixed(2)}/${row.pmLow.toFixed(2)}  ATR ${row.atr.toFixed(2)}  open ${candles[0]?.o.toFixed(2) ?? "n/a"}  last ${last ? `${last.c.toFixed(2)} ${hhmm(last.t)}${last.t + 5 > nowMin ? " (forming)" : ""}` : "n/a"}`);
-      lines.push(`       ${row.star ? "" : "[watch row, paper only] "}${st.line}`);
+      lines.push(`       ${row.star ? "" : row.tier === "mega" ? "[mega-cap, T2/T8, store validation pending] " : "[watch row, paper only] "}${st.line}`);
       for (const e of st.events) lines.push(`       ${e}`);
       const tail = candles.slice(-4).map((c) => `${hhmm(c.t)} O ${c.o.toFixed(2)} H ${c.h.toFixed(2)} L ${c.l.toFixed(2)} C ${c.c.toFixed(2)} ${(c.v / 1000).toFixed(0)}k${c.t + 5 > nowMin ? " (forming)" : ""}`);
       if (tail.length) lines.push(`       ${tail.join(" | ")}`);

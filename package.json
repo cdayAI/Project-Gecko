@@ -63,6 +63,7 @@
     "theory": "node --import tsx src/backtest/theory-cli.ts",
     "history:pull": "node --import tsx src/data/history-pull.ts",
     "log": "node --import tsx src/research/trade-log.ts",
+    "score": "node --import tsx src/research/scorecard.ts",
     "packet": "node --import tsx src/research/daily-packet.ts",
     "live": "node --import tsx src/research/live-monitor.ts",
     "morning": "node --import tsx src/research/morning.ts",

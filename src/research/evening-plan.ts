@@ -229,6 +229,14 @@ async function main(): Promise<void> {
   const dir = path.join("docs", "daily", forDate);
   fs.mkdirSync(dir, { recursive: true });
 
+  // Today's calls, scored with the tested rule (npm run score).
+  say(`[0/6] scoring today's calls (${today})`);
+  const scored = run("npm", ["run", "score", "--", "--date", today, "--provider", args.provider]);
+  const scoreFile = path.join("docs", "daily", today, "score.md");
+  const scoreLines = fs.existsSync(scoreFile) && fs.statSync(scoreFile).mtimeMs > now - 3_600_000
+    ? fs.readFileSync(scoreFile, "utf-8").split("\n").slice(1)
+    : [`not scored: ${scored.out.trim().split("\n").filter((l) => l.trim()).slice(-1)[0] ?? "no output"}`];
+
   // Universe and levels.
   const uni = loadUniverse();
   const entries = new Map<string, UniverseEntry>();
@@ -353,8 +361,10 @@ async function main(): Promise<void> {
     `Earnings in the universe: after today's close ${erToday.length ? erToday.map((r) => r.symbol).join(", ") : "none"}; before the open on ${forDate}: ${erBmo.length ? erBmo.map((r) => r.symbol).join(", ") : "none"}${erUnknown.length ? `; time not supplied: ${erUnknown.map((r) => r.symbol).join(", ")}` : ""}`,
     ...(notes.length ? [`Notes: ${notes.join("; ")}`] : []),
     ``,
-    `Today's monitor record:`,
-    ...monitorRecord(today).map((l) => `- ${l}`),
+    `## Today's calls, scored (${today}, paper, the tested rule)`,
+    ...scoreLines,
+    ``,
+    `Monitor record: ${monitorRecord(today).join("; ")}`,
     ``,
   ];
   const tier1 = [

@@ -28,7 +28,7 @@ export interface TradeRecord {
   readonly symbol: string;
   readonly side: "long" | "short";
   readonly source: "gap" | "swing" | "discretionary" | "other";
-  readonly tier: "star" | "large" | "watch" | "bounce" | "none";   // scanner tier at decision time
+  readonly tier: "star" | "large" | "watch" | "mega" | "bounce" | "none";   // scanner tier at decision time
   readonly gapPct?: number;
   readonly sector?: string;             // e.g. "SMH +2.5%"
   readonly catalyst?: string;           // what you believed the reason was, at the time
@@ -47,9 +47,27 @@ export interface TradeRecord {
   readonly notes?: string;
 }
 
+// Scorecard records (npm run score): one file per session, rewritten on each
+// scoring run, so re-scoring a day never duplicates and never conflicts with
+// manual records.
+export const AUTO_DIR = path.join("docs", "log", "auto");
+
+function readJsonl(file: string): TradeRecord[] {
+  if (!fs.existsSync(file)) return [];
+  return fs.readFileSync(file, "utf-8").split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l) as TradeRecord);
+}
+
+function readManual(): TradeRecord[] {
+  return readJsonl(LOG_FILE);
+}
+
+function readAuto(): TradeRecord[] {
+  if (!fs.existsSync(AUTO_DIR)) return [];
+  return fs.readdirSync(AUTO_DIR).filter((f) => /^\d{4}-\d{2}-\d{2}\.jsonl$/.test(f)).sort().flatMap((f) => readJsonl(path.join(AUTO_DIR, f)));
+}
+
 function readAll(): TradeRecord[] {
-  if (!fs.existsSync(LOG_FILE)) return [];
-  return fs.readFileSync(LOG_FILE, "utf-8").split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l) as TradeRecord);
+  return [...readManual(), ...readAuto()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
 function writeAll(rows: readonly TradeRecord[]): void {
@@ -92,14 +110,14 @@ function stat(label: string, rows: readonly TradeRecord[]): string {
   const gw = w.reduce((s, x) => s + x, 0), gl = -l.reduce((s, x) => s + x, 0);
   const exp = rets.reduce((s, x) => s + x, 0) / rets.length;
   const usd = closed.map(pnlUsd).filter((x): x is number => x !== null).reduce((s, x) => s + x, 0);
-  return `${label.padEnd(34)} n=${String(closed.length).padStart(3)}  win ${(w.length / closed.length * 100).toFixed(0).padStart(3)}%  avg win ${(w.length ? gw / w.length : 0).toFixed(2)}%  avg loss ${(l.length ? -gl / l.length : 0).toFixed(2)}%  exp ${exp >= 0 ? "+" : ""}${exp.toFixed(2)}%  PF ${(gl > 0 ? gw / gl : 99).toFixed(2)}  realized $${usd.toFixed(0)}`;
+  return `${label.padEnd(34)} n=${String(closed.length).padStart(3)}  win ${(w.length / closed.length * 100).toFixed(0).padStart(3)}%  avg win ${(w.length ? gw / w.length : 0).toFixed(2)}%  avg loss ${(l.length ? -gl / l.length : 0).toFixed(2)}%  exp ${exp >= 0 ? "+" : ""}${exp.toFixed(2)}%  PF ${(gl > 0 ? gw / gl : 99).toFixed(2)}  P&L $${usd.toFixed(0)}`;
 }
 
 function main(): void {
   const argv = process.argv.slice(2);
   const cmd = argv[0] ?? "report";
   const kv = parseKv(argv.slice(1));
-  const rows = readAll();
+  const rows = cmd === "add" || cmd === "close" ? readManual() : readAll();
 
   if (cmd === "add") {
     const date = kv.get("date") ?? new Date().toISOString().slice(0, 10);
@@ -159,10 +177,13 @@ function main(): void {
   process.stdout.write(stat("ALL closed", rows) + "\n");
   process.stdout.write(stat("  taken (real fills)", rows.filter((r) => r.taken)) + "\n");
   process.stdout.write(stat("  watched (paper)", rows.filter((r) => !r.taken)) + "\n");
+  const auto = rows.filter((r) => r.id.startsWith("auto-"));
+  process.stdout.write(stat("  Gecko calls (auto rule replay)", auto) + "\n");
+  for (const tier of ["star", "mega", "large", "watch"] as const) process.stdout.write(stat(`    calls tier=${tier}`, auto.filter((r) => r.tier === tier)) + "\n");
   process.stdout.write(stat("  stock", rows.filter((r) => r.instrument === "stock")) + "\n");
   process.stdout.write(stat("  options", rows.filter((r) => r.instrument !== "stock")) + "\n");
   for (const source of ["gap", "swing", "discretionary", "other"] as const) process.stdout.write(stat(`  source=${source}`, rows.filter((r) => r.source === source)) + "\n");
-  for (const tier of ["star", "large", "watch", "bounce", "none"] as const) process.stdout.write(stat(`  tier=${tier}`, rows.filter((r) => r.tier === tier)) + "\n");
+  for (const tier of ["star", "mega", "large", "watch", "bounce", "none"] as const) process.stdout.write(stat(`  tier=${tier}`, rows.filter((r) => r.tier === tier)) + "\n");
   process.stdout.write(stat("  with a named catalyst", rows.filter((r) => (r.catalyst ?? "").trim().length > 0)) + "\n");
   process.stdout.write(stat("  no catalyst noted", rows.filter((r) => (r.catalyst ?? "").trim().length === 0)) + "\n");
   const open = rows.filter((r) => returnPct(r) === null);
