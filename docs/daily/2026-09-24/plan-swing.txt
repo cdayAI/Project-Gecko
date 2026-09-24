@@ -1,0 +1,31 @@
+
+> gecko@0.2.0 scan:swing
+> node --import tsx src/research/swing-scan.ts --top 10 --provider yahoo
+
+  400/1734 (1.0 min)
+  800/1734 (2.0 min)
+  1200/1734 (3.0 min)
+  1600/1734 (4.1 min)
+
+===== Oversold-bounce swing scan (H-BOUNCE-WR, win-rate variant), bars through 2026-09-23 =====
+Evaluated 1734 names (0 failed), 4.4 min. Contracts via Cboe delayed chain (closing marks).
+Breadth: 68 names down 3 sessions >= 1.5 ATR above their 200-day (12 with drops >= 2.5 ATR)  ->  STAND ASIDE (breadth below 75)
+Breadth-30 tier (H-BOUNCE base rule, more days and less edge: +0.40%/trade, PF 1.25, 424 trades over 134 active days): TRADE (rank by drop, up to 5, exit on a close above the 5-day average)
+SPY regime: above its 50-day (the diagnostic did better below: +0.68%/trade vs +0.07%).
+
+Candidates ranked by drop size (largest first):
+  Sym       Close Drop ATR    3d %     ATR Target (+1% of entry) Stop ref (close-2ATR)  $vol20  Contract (deep ITM call, 14-35d)
+  ALL      225.66     4.29   -10.5    6.19   227.92 (from close)                213.29    439M  ALL261016C00210000  2026-10-16 210C  19.50/22.30 d0.89 oi 65
+  PAYX     104.49     3.76   -10.3    3.19   105.53 (from close)                 98.10    349M  PAYX261016C00095000  2026-10-16 95C  18.70/22.10 d0.96 oi 1 THIN
+  PAY       29.95     3.63   -17.1    1.70    30.25 (from close)                 26.55     41M  PAY261016C00028000  2026-10-16 28C  4.10/6.10 d0.86 oi 0 THIN
+  WGS       85.20     3.38   -18.8    5.84    86.05 (from close)                 73.53     52M  WGS261009C00078000  2026-10-09 78C  18.60/22.60 d0.93 oi 0 THIN
+  FRO       47.56     3.14   -12.0    2.06    48.04 (from close)                 43.44    179M  FRO261016C00044000  2026-10-16 44C  0.00/0.00 d0.00 oi 2 THIN
+  AIZ      266.97     3.02    -5.9    5.57   269.64 (from close)                255.84     95M  AIZ261016C00250000  2026-10-16 250C  22.10/25.00 d0.87 oi 0 THIN
+  AMP      502.79     2.92    -7.9   14.72   507.82 (from close)                473.36    297M  AMP261016C00460000  2026-10-16 460C  52.30/57.50 d0.93 oi 0 THIN
+  RAMP      37.44     2.90    -1.2    0.16    37.81 (from close)                 37.13     46M  RAMP261016C00035000  2026-10-16 35C  0.65/4.90 d0.94 oi 0 THIN
+  NWSA      28.12     2.86    -6.8    0.72    28.40 (from close)                 26.68    136M  NWSA261016C00025000  2026-10-16 25C  4.10/4.60 d0.87 oi 214
+  TRV      360.39     2.71    -5.0    7.04   363.99 (from close)                346.31    554M  TRV261016C00330000  2026-10-16 330C  42.60/44.40 d0.93 oi 208
+  ... 2 more (use --top to show)
+
+Rules (H-BOUNCE-WR, validation window 74.7% win, +1.43%/trade, PF 2.6 at 20 bps): enter at the next open; exit on the first close at or above entry +1%; stop on a close 2 ATR below entry; out after 5 sessions regardless. Only when breadth >= 75 AND SPY is below its 50-day. Rank by drop, take up to 5. Stock or a deep in-the-money call (stock-like); not an at-the-money option, which a +1% target does not pay for.
+

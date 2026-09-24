@@ -1,0 +1,28 @@
+Theory tests 2026-09-23: source yahoo, window 59 days (Yahoo) or the store, slippage 10 bps/side, universe 1734 names (built 2026-09-21)
+Rule: first 5-minute close beyond the pre-market extreme (09:30 candle included) confirms; entry at the next candle's open; no signal after 11:30; skip if the open is 1.5% beyond the extreme; stop on a 5-minute close through the 09:30 candle's opposite extreme; half at 1 ATR, rest at 1.5 ATR; time exit 15:45. Pass: n >= 30, exp > 0, PF >= 1.3, both date halves positive.
+
+===== T12 Earnings drift in a pullback: T10's long signal, 5-session hold, only when SPY closed below its 50-day on the reaction day; unseen window 2020-01-02 to 2022-12-27 =====
+  15404 earnings reactions over 753 sessions (2020-01-02 to 2022-12-27); 5434 signals
+  unfiltered T10 rule: n=2845  win 51.6%  exp +0.17%  PF 1.06  net at $1k/trade +$4843
+    selection (<= 2021-07-21): n=1274  win 51.8%  exp +0.37%  PF 1.13  net at $1k/trade +$4662
+    validation (> 2021-07-21): n=1571  win 51.5%  exp +0.01%  PF 1.00  net at $1k/trade +$181
+    descriptive line, no verdict; would read: NOT QUALIFIED
+    exit mix: hold 88%, stop 12%
+  SPY below its 50-day (the T12 rule): n=882  win 52.4%  exp +0.36%  PF 1.11  net at $1k/trade +$3144
+    selection (<= 2022-03-04): n=413  win 55.0%  exp +1.09%  PF 1.36  net at $1k/trade +$4497
+    validation (> 2022-03-04): n=469  win 50.1%  exp -0.29%  PF 0.91  net at $1k/trade -$1353
+    verdict: NOT QUALIFIED
+    exit mix: stop 13%, hold 87%
+  SPY above its 50-day (for reference): n=1963  win 51.3%  exp +0.09%  PF 1.03  net at $1k/trade +$1700
+    selection (<= 2021-04-27): n=933  win 48.9%  exp -0.25%  PF 0.92  net at $1k/trade -$2337
+    validation (> 2021-04-27): n=1030  win 53.5%  exp +0.39%  PF 1.16  net at $1k/trade +$4037
+    descriptive line, no verdict; would read: NOT QUALIFIED
+    exit mix: hold 88%, stop 12%
+  T12 rule, hold 10 sessions (descriptive): n=882  win 48.4%  exp -0.05%  PF 0.99  net at $1k/trade -$399
+    selection (<= 2022-03-04): n=413  win 50.8%  exp +0.83%  PF 1.18  net at $1k/trade +$3414
+    validation (> 2022-03-04): n=469  win 46.3%  exp -0.81%  PF 0.81  net at $1k/trade -$3813
+    descriptive line, no verdict; would read: NOT QUALIFIED
+    exit mix: stop 26%, hold 74%
+  T12 against the unfiltered rule on the unseen window: +0.36% vs +0.17% per trade (better)
+
+33.5 min

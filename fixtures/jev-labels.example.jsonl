@@ -1,0 +1,12 @@
+{"eventId":"SYNTHETIC-development-event","questionId":"catalyst","label":"earnings","split":"development","labelledAt":1789833602000}
+{"eventId":"SYNTHETIC-development-event","questionId":"guidance","label":"raised","split":"development","labelledAt":1789833602000}
+{"eventId":"SYNTHETIC-development-event","questionId":"commitment","label":"unknown","split":"development","labelledAt":1789833602000}
+{"eventId":"SYNTHETIC-development-event","questionId":"dilution","label":"unknown","split":"development","labelledAt":1789833602000}
+{"eventId":"SYNTHETIC-development-event","questionId":"thesis_relation","label":"unknown","split":"development","labelledAt":1789833602000}
+{"eventId":"SYNTHETIC-development-event","questionId":"evidence_scope","label":"primary_excerpt","split":"development","labelledAt":1789833602000}
+{"eventId":"SYNTHETIC-holdout-event","questionId":"catalyst","label":"contract","split":"holdout","labelledAt":1789833603000}
+{"eventId":"SYNTHETIC-holdout-event","questionId":"guidance","label":"unknown","split":"holdout","labelledAt":1789833603000}
+{"eventId":"SYNTHETIC-holdout-event","questionId":"commitment","label":"conditional","split":"holdout","labelledAt":1789833603000}
+{"eventId":"SYNTHETIC-holdout-event","questionId":"dilution","label":"unknown","split":"holdout","labelledAt":1789833603000}
+{"eventId":"SYNTHETIC-holdout-event","questionId":"thesis_relation","label":"contradicts","split":"holdout","labelledAt":1789833603000}
+{"eventId":"SYNTHETIC-holdout-event","questionId":"evidence_scope","label":"primary_excerpt","split":"holdout","labelledAt":1789833603000}

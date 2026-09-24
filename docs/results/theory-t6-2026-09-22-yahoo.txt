@@ -1,0 +1,29 @@
+Theory tests 2026-09-22: source yahoo, window 59 days (Yahoo) or the store, slippage 10 bps/side, universe 1734 names (built 2026-09-21)
+Rule: first 5-minute close beyond the pre-market extreme (09:30 candle included) confirms; entry at the next candle's open; no signal after 11:30; skip if the open is 1.5% beyond the extreme; stop on a 5-minute close through the 09:30 candle's opposite extreme; half at 1 ATR, rest at 1.5 ATR; time exit 15:45. Pass: n >= 30, exp > 0, PF >= 1.3, both date halves positive.
+
+===== T6 Failed-gap fade: a gap up that closes a 5-minute candle below its pre-market low is shorted with the mirror rule (mirror long for gaps down); 1500 names =====
+  gap days and how many fired the fade by 11:30: down 10+%: 10/53, down 5-10%: 31/257, down <5%: 101/629, up 10+%: 9/40, up 5-10%: 45/235, up <5%: 240/840
+  short fade, gap up 5-10%: n=45  win 46.7%  exp -0.19%  PF 0.82  net at $1k/trade -$87
+    selection (<= 2026-09-03): n=22  win 45.5%  exp -0.52%  PF 0.64  net at $1k/trade -$115
+    validation (> 2026-09-03): n=23  win 47.8%  exp +0.12%  PF 1.16  net at $1k/trade +$28
+    verdict: NOT QUALIFIED
+    exit mix: time 76%, stop 16%, target1 7%, target2 2%
+  short fade, gap up 3-5%: n=240  win 44.6%  exp -0.19%  PF 0.80  net at $1k/trade -$461
+    selection (<= 2026-09-02): n=99  win 52.5%  exp +0.14%  PF 1.18  net at $1k/trade +$142
+    validation (> 2026-09-02): n=141  win 39.0%  exp -0.43%  PF 0.59  net at $1k/trade -$603
+    descriptive line, no verdict; would read: NOT QUALIFIED
+    exit mix: time 78%, stop 18%, target1 1%, eod 3%, target2 0%
+  short fade, gap up 10%+: n=9  win 88.9%  exp +2.70%  PF 11.04  net at $1k/trade +$243
+  long fade, gap down 5-10%: n=31  win 25.8%  exp -1.79%  PF 0.19  net at $1k/trade -$554
+    selection (<= 2026-08-28): n=13  win 23.1%  exp -2.20%  PF 0.23  net at $1k/trade -$286
+    validation (> 2026-08-28): n=18  win 27.8%  exp -1.49%  PF 0.15  net at $1k/trade -$268
+    descriptive line, no verdict; would read: NOT QUALIFIED
+    exit mix: time 61%, stop 26%, eod 6%, target1 3%, target2 3%
+  long fade, gap down 3-5%: n=101  win 27.7%  exp -1.06%  PF 0.24  net at $1k/trade -$1069
+    selection (<= 2026-09-01): n=41  win 24.4%  exp -1.41%  PF 0.20  net at $1k/trade -$578
+    validation (> 2026-09-01): n=60  win 30.0%  exp -0.82%  PF 0.29  net at $1k/trade -$491
+    descriptive line, no verdict; would read: NOT QUALIFIED
+    exit mix: time 80%, stop 14%, eod 4%, target1 2%
+  long fade, gap down 10%+: n=10  win 30.0%  exp +0.05%  PF 1.05  net at $1k/trade +$5
+
+8.4 min

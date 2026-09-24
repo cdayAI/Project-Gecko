@@ -1,0 +1,36 @@
+Theory tests 2026-09-22: source yahoo, window 59 days (Yahoo) or the store, slippage 10 bps/side, universe 1734 names (built 2026-09-21)
+Rule: first 5-minute close beyond the pre-market extreme (09:30 candle included) confirms; entry at the next candle's open; no signal after 11:30; skip if the open is 1.5% beyond the extreme; stop on a 5-minute close through the 09:30 candle's opposite extreme; half at 1 ATR, rest at 1.5 ATR; time exit 15:45. Pass: n >= 30, exp > 0, PF >= 1.3, both date halves positive.
+
+===== T2 Mega-cap catalyst gap: names with 20-day dollar volume >= $1.0B (101), pre-market gap up 2%+ above the 20-day high with the sector ETF green pre-market; the gap rule long =====
+  158 rule entries from gaps >= 2%
+  gap >= 2%, any structure: n=158  win 52.5%  exp +0.58%  PF 1.64  net at $1k/trade +$921
+    selection (<= 2026-09-04): n=63  win 50.8%  exp +0.52%  PF 1.47  net at $1k/trade +$328
+    validation (> 2026-09-04): n=95  win 53.7%  exp +0.62%  PF 1.79  net at $1k/trade +$593
+    descriptive line, no verdict; would read: PASS (n >= 30, exp > 0, PF >= 1.3, both halves positive)
+    exit mix: time 59%, stop 30%, target1 9%, target2 2%, eod 1%
+  gap >= 2%, above the 20-day high: n=22  win 50.0%  exp +0.77%  PF 2.01  net at $1k/trade +$169
+  gap >= 2%, above the 20-day high, sector green (the AMD specification): n=18  win 55.6%  exp +1.05%  PF 2.39  net at $1k/trade +$190
+  gap >= 3%, any structure: n=78  win 55.1%  exp +0.73%  PF 1.80  net at $1k/trade +$571
+    selection (<= 2026-09-04): n=31  win 51.6%  exp +0.25%  PF 1.22  net at $1k/trade +$79
+    validation (> 2026-09-04): n=47  win 57.4%  exp +1.05%  PF 2.39  net at $1k/trade +$493
+    descriptive line, no verdict; would read: PASS (n >= 30, exp > 0, PF >= 1.3, both halves positive)
+    exit mix: time 56%, stop 28%, target1 12%, target2 3%, eod 1%
+  gap >= 3%, above the 20-day high: n=18  win 55.6%  exp +0.94%  PF 2.18  net at $1k/trade +$168
+  gap >= 3%, above the 20-day high, sector green (the AMD specification): n=15  win 60.0%  exp +1.20%  PF 2.46  net at $1k/trade +$179
+    selection (<= 2026-08-27): n=7  win 57.1%  exp +0.36%  PF 1.31  net at $1k/trade +$25
+    validation (> 2026-08-27): n=8  win 62.5%  exp +1.92%  PF 4.72  net at $1k/trade +$154
+    verdict: NOT QUALIFIED (n < 30)
+    exit mix: target1 20%, time 43%, target2 10%, stop 27%
+    T7 exit variant "hold to 15:45" on the AMD specification (gap >= 3%): n=15  win 60.0%  exp +2.71%  PF 4.32  net at $1k/trade +$406; halves +3.33% / +2.17% against the registered exit +0.36% / +1.92%: BEATS IT (both halves, PF >= 1.3)
+    T7 exit variant "half at 1 ATR, rest to 15:45" on the AMD specification (gap >= 3%): n=15  win 60.0%  exp +1.87%  PF 3.29  net at $1k/trade +$281; halves +1.74% / +1.99% against the registered exit +0.36% / +1.92%: BEATS IT (both halves, PF >= 1.3)
+    T7 exit variant "hold to 15:45" on any mega-cap gap >= 3%: n=78  win 55.1%  exp +1.04%  PF 2.13  net at $1k/trade +$810; halves +1.00% / +1.06% against the registered exit +0.25% / +1.05%: BEATS IT (both halves, PF >= 1.3)
+    T7 exit variant "half at 1 ATR, rest to 15:45" on any mega-cap gap >= 3%: n=78  win 55.1%  exp +0.86%  PF 1.93  net at $1k/trade +$668; halves +0.57% / +1.05% against the registered exit +0.25% / +1.05%: does not beat it
+  gap >= 4%, any structure: n=38  win 55.3%  exp +0.90%  PF 1.92  net at $1k/trade +$343
+    selection (<= 2026-09-08): n=17  win 64.7%  exp +1.13%  PF 2.12  net at $1k/trade +$192
+    validation (> 2026-09-08): n=21  win 47.6%  exp +0.72%  PF 1.76  net at $1k/trade +$151
+    descriptive line, no verdict; would read: PASS (n >= 30, exp > 0, PF >= 1.3, both halves positive)
+    exit mix: time 43%, stop 32%, target1 17%, target2 5%, eod 3%
+  gap >= 4%, above the 20-day high: n=16  win 56.3%  exp +1.07%  PF 2.36  net at $1k/trade +$171
+  gap >= 4%, above the 20-day high, sector green (the AMD specification): n=14  win 57.1%  exp +1.18%  PF 2.34  net at $1k/trade +$165
+
+0.2 min

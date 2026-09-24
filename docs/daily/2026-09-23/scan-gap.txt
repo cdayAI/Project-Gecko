@@ -1,0 +1,32 @@
+===== Pre-market gap scan 2026-09-23 09:24 ET =====
+Source: universe file (1734 names, built 2026-09-21T14:44Z, using top 1500 by dollar volume)
+Provider: yahoo (5m bars, no pre-market volume) because yahoo requested
+Tape: SPY -0.14%  QQQ -0.15%  IWM -0.54%  SMH -0.68%  XBI -0.22%  XLF -0.40%  XLE +0.66%  XLK -0.05%  XLV +0.17%  XLI -0.04%  XLY -0.12%
+Scanned 1500: 10 gaps >= 5%, 317 without pre-market prints, 0 failed, 2.9 min
+
+GAP UP: LARGE (gap >= 10%; forward test only, small size)
+  none
+
+GAP UP: WATCH (5-10%; no edge in the tests)
+  Sym     Pre-mkt    Gap%  PM vol  PM high   PM low   20d hi   52w hi >20d >52w <20dLo     ATR  $vol20 Sector      Contract  |  historical bucket
+   INFQ     14.90   +5.44     n/a    15.10    14.54    14.53    21.28  Y    -    -      0.84    115M SPY -0.1%   (chains off)  |  gap5-10%: ~42-46% win, about -0.2% (no edge)
+   QUBT      9.58   +5.02     n/a     9.60     9.28     8.95    25.84  Y    -    -      0.35     55M XLK -0.1%   (chains off)  |  gap5-10%: ~42-46% win, about -0.2% (no edge)
+   QNT      55.45   +7.63     n/a    55.45    52.87    56.96    86.79  -    -    -      2.95     85M SPY -0.1%   (chains off)  |  gap5-10%: ~42-46% win, about -0.2% (no edge)
+   IONQ     45.46   +6.88     n/a    47.10    44.77    45.46    84.64  -    -    -      2.36    752M XLK -0.1%   (chains off)  |  gap5-10%: ~42-46% win, about -0.2% (no edge)
+   QBTS     18.66   +5.54     n/a    18.77    18.23    20.59    46.75  -    -    -      0.90    287M XLK -0.1%   (chains off)  |  gap5-10%: ~42-46% win, about -0.2% (no edge)
+   CBRL     47.92   +5.36     n/a    51.52    45.45    58.78    60.26  -    -    -      2.30     45M SPY -0.1%   (chains off)  |  gap5-10%: ~42-46% win, about -0.2% (no edge)
+
+GAP UP: MEGA-CAP (2-5% gaps in names trading $1B a day; T2 in docs/theories.md, store validation pending; paper until then)
+  none
+
+GAP DOWN: LARGE (gap <= -10%; forward test only)
+  Sym     Pre-mkt    Gap%  PM vol  PM high   PM low   20d hi   52w hi >20d >52w <20dLo     ATR  $vol20 Sector      Contract  |  historical bucket
+   PFG     100.11  -11.87     n/a   113.59   100.11   121.18   121.18  -    -    Y      2.88    162M SPY -0.1%   (chains off)  |  gap10%+: 45% win -0.28% (Mar-Jun) / 54% win +0.55% (Jun-Sep), n=314
+
+GAP DOWN: WATCH (-5 to -10%)
+  Sym     Pre-mkt    Gap%  PM vol  PM high   PM low   20d hi   52w hi >20d >52w <20dLo     ATR  $vol20 Sector      Contract  |  historical bucket
+   PAYX    106.82   -6.73     n/a   117.00   104.49   127.98   132.87  -    -    Y      2.57    317M SPY -0.1%   (chains off)  |  gap5-10%: ~42-46% win, about -0.2% (no edge)
+   VOYG     34.02   -9.35     n/a    35.88    34.02    40.41    52.40  -    -    -      2.15     46M SPY -0.1%   (chains off)  |  gap5-10%: ~42-46% win, about -0.2% (no edge)
+   SBSW     10.84   -5.01     n/a    11.25    10.70    13.44    21.29  -    -    Y      0.58     68M SPY -0.1%   (chains off)  |  gap5-10%: ~42-46% win, about -0.2% (no edge)
+
+Entry rule (H-GAP-GO as registered; see docs/gap-and-go-registration-2026-09-21.md): no pre-market orders. Enter on the first 5-minute candle that CLOSES beyond the pre-market extreme (earliest 09:35). Stop: 5-minute close back through the 09:30 candle's oppos

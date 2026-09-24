@@ -1,0 +1,20 @@
+import assert from "node:assert/strict";
+import { sessionUncertainty } from "./research-statistics.js";
+import { createLogger } from "../core/logger.js";
+
+const positive = sessionUncertainty(Array<number>(32).fill(2));
+assert.equal(positive.lowerBoundNetPerSession, 2);
+assert.equal(positive.upperBoundNetPerSession, 2);
+assert.equal(positive.meanNetPerSession, 2);
+const negative = sessionUncertainty(Array<number>(32).fill(-2));
+assert.equal(negative.upperBoundNetPerSession, -2);
+const concentrated = [100, ...Array<number>(31).fill(-1)];
+const result = sessionUncertainty(concentrated);
+assert.ok(result.meanNetPerSession > 0);
+assert.ok(result.lowerBoundNetPerSession < 0, "One lucky day must not provide positive lower confidence");
+assert.deepEqual(sessionUncertainty(concentrated), result);
+assert.throws(() => sessionUncertainty([1, 2, 3, 4]));
+assert.throws(() => sessionUncertainty([100, -20, -20, -20, -20]), "One circular block cannot supply an uncertainty interval");
+assert.throws(() => sessionUncertainty([1, 2, 3, 4, NaN]));
+assert.throws(() => sessionUncertainty([1, 2, 3, 4, 5], Infinity));
+createLogger("research-statistics-test").info("Session uncertainty checks passed", { checks: 11 });

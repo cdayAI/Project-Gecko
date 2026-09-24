@@ -1,0 +1,19 @@
+
+> gecko@0.2.0 scan:swing
+> node --import tsx src/research/swing-scan.ts --top 10 --provider schwab
+
+  400/1734 (2.7 min)
+  800/1734 (5.4 min)
+  1200/1734 (8.1 min)
+  1600/1734 (10.8 min)
+
+===== Oversold-bounce swing scan (H-BOUNCE-WR, win-rate variant), bars through 2026-09-21 =====
+Evaluated 1734 names (0 failed), 11.7 min. Contracts via Schwab live chain (Windows vault).
+Breadth: 19 names down 3 sessions >= 1.5 ATR above their 200-day (0 with drops >= 2.5 ATR)  ->  STAND ASIDE (breadth below 75)
+SPY regime: above its 50-day (the diagnostic did better below: +0.68%/trade vs +0.07%).
+
+Candidates ranked by drop size (largest first):
+  Sym       Close Drop ATR    3d %     ATR Target (+1% of entry) Stop ref (close-2ATR)  $vol20  Contract (deep ITM call, 14-35d)
+
+Rules (H-BOUNCE-WR, validation window 74.7% win, +1.43%/trade, PF 2.6 at 20 bps): enter at the next open; exit on the first close at or above entry +1%; stop on a close 2 ATR below entry; out after 5 sessions regardless. Only when breadth >= 75 AND SPY is below its 50-day. Rank by drop, take up to 5. Stock or a deep in-the-money call (stock-like); not an at-the-money option, which a +1% target does not pay for.
+

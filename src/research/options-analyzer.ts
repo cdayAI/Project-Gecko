@@ -67,7 +67,7 @@ export function analyzeChain(chain: OptionChainSnapshot, budget: ResearchBudget,
       for (const w of widths) {
         const above = calls.filter((c) => c.strike > atmCall.strike);
         const shortLeg = w > 0 ? nearest(above, atmCall.strike + w) : above[0] ?? null;
-        if (!shortLeg || seen.has(shortLeg.strike)) continue;
+        if (!shortLeg || !quotable(shortLeg) || seen.has(shortLeg.strike)) continue;
         seen.add(shortLeg.strike);
         const v = vertical("call-debit-spread", "LONG", exp, dte, atmCall, shortLeg, budget);
         if (v.debitMid > 0) out.push(v);
@@ -78,7 +78,7 @@ export function analyzeChain(chain: OptionChainSnapshot, budget: ResearchBudget,
       for (const w of widths) {
         const below = puts.filter((p) => p.strike < atmPut.strike);
         const shortLeg = w > 0 ? nearest(below, atmPut.strike - w) : below[below.length - 1] ?? null;
-        if (!shortLeg || seen.has(shortLeg.strike)) continue;
+        if (!shortLeg || !quotable(shortLeg) || seen.has(shortLeg.strike)) continue;
         seen.add(shortLeg.strike);
         const v = vertical("put-debit-spread", "SHORT", exp, dte, atmPut, shortLeg, budget);
         if (v.debitMid > 0) out.push(v);
@@ -108,7 +108,7 @@ export function analyzeChain(chain: OptionChainSnapshot, budget: ResearchBudget,
 
 // A leg we can actually price: a real bid and an ask at or above it.
 function quotable(q: OptionQuote): boolean {
-  return q.bid > 0 && q.ask >= q.bid;
+  return Number.isFinite(q.bid) && Number.isFinite(q.ask) && q.bid > 0 && q.ask >= q.bid;
 }
 
 function nearest(list: readonly OptionQuote[], target: number): OptionQuote | null {
@@ -141,10 +141,11 @@ function single(kind: StructureKind, direction: "LONG" | "SHORT", exp: string, d
   const m = mid(leg);
   const debitAsk = leg.ask > 0 ? leg.ask : m;
   const maxLoss = debitAsk * 100;
+  const maxGain = kind === "long-put" ? Math.max(0, leg.strike - debitAsk) * 100 : null;
   const breakeven = kind === "long-call" ? leg.strike + debitAsk : leg.strike - debitAsk;
   return {
     kind, direction, expiration: exp, daysToExpiration: dte, legs: [leg],
-    debitMid: m, debitAsk, maxLossPerContract: maxLoss, maxGainPerContract: null, rewardToRisk: null, breakeven,
+    debitMid: m, debitAsk, maxLossPerContract: maxLoss, maxGainPerContract: maxGain, rewardToRisk: maxGain === null ? null : maxGain / maxLoss, breakeven,
     spreadCostPct: m > 0 ? ((leg.ask - leg.bid) / m) * 100 : 0,
     netDelta: leg.delta, netTheta: leg.theta !== null ? leg.theta * 100 : null,
     contractsForBudget: maxLoss > 0 ? Math.floor(budget.maxRiskPerTradeUsd / maxLoss) : 0,

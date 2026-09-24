@@ -1,0 +1,50 @@
+Theory tests 2026-09-23: source yahoo, window 59 days (Yahoo) or the store, slippage 10 bps/side, universe 1734 names (built 2026-09-21)
+Rule: first 5-minute close beyond the pre-market extreme (09:30 candle included) confirms; entry at the next candle's open; no signal after 11:30; skip if the open is 1.5% beyond the extreme; stop on a 5-minute close through the 09:30 candle's opposite extreme; half at 1 ATR, rest at 1.5 ATR; time exit 15:45. Pass: n >= 30, exp > 0, PF >= 1.3, both date halves positive.
+
+===== T9 Gap attribute filters: every pre-market gap of 3%+ replayed with the registered rule (long up, short down), then six pre-declared filters; 1500 names =====
+  972 rule trades from gaps of 3%+ (0 with pre-market volume)
+  long, gap 3-5%: n=367  win 48.0%  exp +0.29%  PF 1.29  net at $1k/trade +$1073; halves +0.01% / +0.47% (split 2026-09-04)
+    F1 stop within 1 ATR: n=349  win 49.6%  exp +0.38%  PF 1.40  net at $1k/trade +$1326; halves +0.08% / +0.57%: IMPROVES (n >= 30, exp > 0, PF >= 1.3, beats the population in both halves)
+    F2 09:30 volume >= 3x a normal 5-min bar: n=314  win 50.6%  exp +0.42%  PF 1.43  net at $1k/trade +$1308; halves +0.15% / +0.60%: IMPROVES (n >= 30, exp > 0, PF >= 1.3, beats the population in both halves)
+    F3 SPY with the trade at entry: n=134  win 44.8%  exp +0.20%  PF 1.20  net at $1k/trade +$274; halves +0.07% / +0.31%: no
+    F4 entry by 09:45: n=243  win 49.0%  exp +0.47%  PF 1.46  net at $1k/trade +$1139; halves +0.06% / +0.82%: IMPROVES (n >= 30, exp > 0, PF >= 1.3, beats the population in both halves)
+    F5 strong 09:30 candle (top or bottom third): n=181  win 46.4%  exp +0.29%  PF 1.26  net at $1k/trade +$521; halves +0.15% / +0.45%: no
+    F6 pre-market volume >= 10% of a day: no data on this source
+  long, gap 5-10%: n=110  win 49.1%  exp +0.24%  PF 1.18  net at $1k/trade +$269; halves +0.77% / -0.36% (split 2026-09-02)
+    F1 stop within 1 ATR: n=96  win 46.9%  exp +0.17%  PF 1.12  net at $1k/trade +$166; halves +0.80% / -0.48%: no
+    F2 09:30 volume >= 3x a normal 5-min bar: n=108  win 50.0%  exp +0.31%  PF 1.24  net at $1k/trade +$333; halves +0.84% / -0.31%: no
+    F3 SPY with the trade at entry: n=30  win 50.0%  exp +0.07%  PF 1.05  net at $1k/trade +$22; halves -0.90% / +0.82%: no
+    F4 entry by 09:45: n=82  win 52.4%  exp +0.60%  PF 1.48  net at $1k/trade +$494; halves +1.05% / -0.14%: IMPROVES (n >= 30, exp > 0, PF >= 1.3, beats the population in both halves)
+    F5 strong 09:30 candle (top or bottom third): n=46  win 56.5%  exp +0.56%  PF 1.43  net at $1k/trade +$258; halves +1.35% / -0.16%: IMPROVES (n >= 30, exp > 0, PF >= 1.3, beats the population in both halves)
+    F6 pre-market volume >= 10% of a day: no data on this source
+  long, gap 10%+: n=14  win 64.3%  exp +0.15%  PF 1.09  net at $1k/trade +$21; halves +0.57% / -0.61% (split 2026-08-28)
+    F1 stop within 1 ATR: n=4  win 75.0%  exp +0.67%  PF 1.59  net at $1k/trade +$27; halves +0.76% / +0.40%: no
+    F2 09:30 volume >= 3x a normal 5-min bar: n=14  win 64.3%  exp +0.15%  PF 1.09  net at $1k/trade +$21; halves +0.57% / -0.61%: no
+    F3 SPY with the trade at entry: n=6  win 33.3%  exp -2.06%  PF 0.36  net at $1k/trade -$123; halves -2.03% / -2.08%: no
+    F4 entry by 09:45: n=11  win 54.5%  exp -0.56%  PF 0.74  net at $1k/trade -$62; halves -0.52% / -0.61%: no
+    F5 strong 09:30 candle (top or bottom third): n=5  win 40.0%  exp -1.05%  PF 0.57  net at $1k/trade -$52; halves -2.03% / +0.43%: no
+    F6 pre-market volume >= 10% of a day: no data on this source
+  long, star spec (10%+, above the 20-day high, sector green): n=9, too few for filters
+  short, gap 3-5%: n=322  win 39.1%  exp -0.34%  PF 0.69  net at $1k/trade -$1110; halves +0.10% / -0.94% (split 2026-09-02)
+    F1 stop within 1 ATR: n=312  win 39.1%  exp -0.36%  PF 0.68  net at $1k/trade -$1131; halves +0.13% / -1.03%: no
+    F2 09:30 volume >= 3x a normal 5-min bar: n=273  win 36.6%  exp -0.44%  PF 0.62  net at $1k/trade -$1215; halves -0.15% / -0.84%: no
+    F3 SPY with the trade at entry: n=249  win 37.3%  exp -0.48%  PF 0.60  net at $1k/trade -$1192; halves -0.07% / -1.05%: no
+    F4 entry by 09:45: n=230  win 37.8%  exp -0.34%  PF 0.71  net at $1k/trade -$787; halves +0.16% / -0.91%: no
+    F5 strong 09:30 candle (top or bottom third): n=161  win 39.8%  exp -0.24%  PF 0.79  net at $1k/trade -$386; halves +0.43% / -0.83%: no
+    F6 pre-market volume >= 10% of a day: no data on this source
+  short, gap 5-10%: n=139  win 37.4%  exp -0.27%  PF 0.81  net at $1k/trade -$373; halves +1.05% / -1.16% (split 2026-09-01)
+    F1 stop within 1 ATR: n=132  win 35.6%  exp -0.32%  PF 0.78  net at $1k/trade -$420; halves +1.00% / -1.18%: no
+    F2 09:30 volume >= 3x a normal 5-min bar: n=132  win 37.1%  exp -0.34%  PF 0.77  net at $1k/trade -$444; halves +1.05% / -1.36%: no
+    F3 SPY with the trade at entry: n=114  win 35.1%  exp -0.47%  PF 0.68  net at $1k/trade -$539; halves +0.66% / -1.16%: no
+    F4 entry by 09:45: n=98  win 27.6%  exp -0.66%  PF 0.61  net at $1k/trade -$643; halves +1.11% / -1.30%: no
+    F5 strong 09:30 candle (top or bottom third): n=56  win 33.9%  exp -0.44%  PF 0.72  net at $1k/trade -$249; halves +0.94% / -0.90%: no
+    F6 pre-market volume >= 10% of a day: no data on this source
+  short, gap 10%+: n=20  win 55.0%  exp +1.10%  PF 1.70  net at $1k/trade +$220; halves +1.57% / +0.79% (split 2026-09-01)
+    F1 stop within 1 ATR: n=14  win 42.9%  exp +0.10%  PF 1.05  net at $1k/trade +$14; halves +1.57% / -1.01%: no
+    F2 09:30 volume >= 3x a normal 5-min bar: n=20  win 55.0%  exp +1.10%  PF 1.70  net at $1k/trade +$220; halves +1.57% / +0.79%: no
+    F3 SPY with the trade at entry: n=9  win 44.4%  exp +0.30%  PF 1.17  net at $1k/trade +$27; halves +0.62% / -0.09%: no
+    F4 entry by 09:45: n=15  win 53.3%  exp +1.07%  PF 1.61  net at $1k/trade +$161; halves +1.80% / +0.59%: no
+    F5 strong 09:30 candle (top or bottom third): n=11  win 63.6%  exp +1.22%  PF 1.64  net at $1k/trade +$134; halves +1.69% / +1.04%: no
+    F6 pre-market volume >= 10% of a day: no data on this source
+
+8.2 min

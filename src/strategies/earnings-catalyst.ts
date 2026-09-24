@@ -1,9 +1,8 @@
 // EarningsCatalystStrategy: trades the post-earnings move.
 //
-// This is the single biggest Claude-specific edge in the bot. Rules-based
-// bots can compare EPS-actual to EPS-consensus, but they can't read the
-// earnings transcript or 8-K filing and reason about WHY the surprise
-// matters. Claude can.
+// Legacy unqualified strategy hypothesis. Language-model interpretation of
+// filings has not established a trading edge. The implementation below uses
+// a simplified EPS score, not the full-text reasoning workflow described here.
 //
 // Mechanics:
 //   1. Pre-market (or daily at session start): pull upcoming earnings
@@ -29,9 +28,9 @@
 // EPS surprise %. Full text reading (Claude reads the actual 8-K filing)
 // is a follow-up.
 //
-// Documented edge: studies show stocks with >5% EPS beats average
-// +2-4% returns in the day post-earnings; >5% misses average -2-4%.
-// Win rate on directional trade after a confirmed surprise: 70-80%.
+// No substantiated return estimate or win probability exists for this code.
+// Calendar semantics, publication/receipt times, stale-event handling and
+// real option execution require qualification before performance claims.
 
 import { createLogger } from "../core/logger.js";
 import { etParts } from "../utils/time.js";

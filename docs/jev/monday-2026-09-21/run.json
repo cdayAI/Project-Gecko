@@ -1,0 +1,40 @@
+{
+  "runId": "eb4854c3-f28f-4bf3-8e71-0e2959f9dc5e",
+  "mode": "LIVE_SHADOW",
+  "startedAt": 1789932789084,
+  "completedAt": 1789932791223,
+  "model": "jev-1.13.0",
+  "promptVersion": "gecko-evidence-v1",
+  "scanned": 11,
+  "eligible": 11,
+  "attempted": 11,
+  "succeeded": 11,
+  "cached": 0,
+  "unresolved": 0,
+  "invalid": 0,
+  "deferred": 0,
+  "inputTokens": 15439,
+  "estimatedInputCostUsd": 0.000648438,
+  "stoppedReason": null,
+  "sourceHealth": [
+    {
+      "source": "yahoo",
+      "checkedAt": 1789932563649,
+      "status": "ok",
+      "requests": 7,
+      "receivedCount": 138,
+      "acceptedCount": 13,
+      "appendedCount": 11,
+      "duplicateCount": 2,
+      "rejectedCount": 125,
+      "notes": [
+        "Yahoo search is a best-effort headline sample; delivery latency and complete coverage are unknown.",
+        "Age, future-time, relevance, or attribution filters rejected rows."
+      ],
+      "coverage": "bounded-poll",
+      "latency": "unknown"
+    }
+  ],
+  "status": "RESEARCH_ONLY",
+  "monitorActive": false
+}

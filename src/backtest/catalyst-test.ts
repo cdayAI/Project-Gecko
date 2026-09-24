@@ -1,4 +1,7 @@
 // Hypothesis tests for the catalyst-trading plan.
+// LEGACY UNQUALIFIED ILLUSTRATION: event labels are not joined point-in-time,
+// largest moves are selected after observation, and option prices are assumed.
+// Do not use its output as historical options P&L or recommendation evidence.
 //
 // Claims being tested:
 //   1. NFP/CPI release days produce predictable, tradable SPY moves
