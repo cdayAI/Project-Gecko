@@ -1,0 +1,40 @@
+Theory tests 2026-09-23: source yahoo, window 59 days (Yahoo) or the store, slippage 10 bps/side, universe 1734 names (built 2026-09-21)
+Rule: first 5-minute close beyond the pre-market extreme (09:30 candle included) confirms; entry at the next candle's open; no signal after 11:30; skip if the open is 1.5% beyond the extreme; stop on a 5-minute close through the 09:30 candle's opposite extreme; half at 1 ATR, rest at 1.5 ATR; time exit 15:45. Pass: n >= 30, exp > 0, PF >= 1.3, both date halves positive.
+
+===== T11 Earnings drift in an uptrend: T10's long signal, 5-session hold, only when SPY closed above its 50-day on the reaction day; unseen window 2023-01-03 to 2025-07-24 =====
+  21204 earnings reactions over 936 sessions (2022-12-28 to 2026-09-22); 8074 signals
+  Unseen window (2023-01-03 to 2025-07-24):
+    unfiltered T10 rule: n=2766  win 50.9%  exp +0.34%  PF 1.15  net at $1k/trade +$9389
+    selection (<= 2024-04-01): n=1364  win 48.0%  exp -0.05%  PF 0.98  net at $1k/trade -$652
+    validation (> 2024-04-01): n=1402  win 53.6%  exp +0.72%  PF 1.31  net at $1k/trade +$10042
+    descriptive line, no verdict; would read: NOT QUALIFIED
+    exit mix: hold 89%, stop 11%
+    SPY above its 50-day (the T11 rule): n=2036  win 47.9%  exp +0.15%  PF 1.06  net at $1k/trade +$3147
+    selection (<= 2024-03-08): n=1099  win 46.2%  exp -0.20%  PF 0.92  net at $1k/trade -$2144
+    validation (> 2024-03-08): n=937  win 49.8%  exp +0.56%  PF 1.23  net at $1k/trade +$5292
+    verdict: NOT QUALIFIED
+    exit mix: hold 88%, stop 12%
+    SPY below its 50-day (for reference): n=730  win 59.2%  exp +0.86%  PF 1.44  net at $1k/trade +$6242
+    selection (<= 2024-05-02): n=294  win 55.8%  exp +0.64%  PF 1.35  net at $1k/trade +$1869
+    validation (> 2024-05-02): n=436  win 61.5%  exp +1.00%  PF 1.49  net at $1k/trade +$4372
+    descriptive line, no verdict; would read: PASS (n >= 30, exp > 0, PF >= 1.3, both halves positive)
+    exit mix: hold 92%, stop 8%
+  T10 window (2025-07-24 onward, seen when the rule was formed; reference only):
+    unfiltered T10 rule: n=1507  win 49.9%  exp +0.42%  PF 1.17  net at $1k/trade +$6363
+    selection (<= 2026-02-20): n=742  win 51.8%  exp +0.49%  PF 1.23  net at $1k/trade +$3618
+    validation (> 2026-02-20): n=765  win 48.1%  exp +0.36%  PF 1.13  net at $1k/trade +$2745
+    descriptive line, no verdict; would read: NOT QUALIFIED
+    exit mix: hold 89%, stop 11%
+    SPY above its 50-day: n=1268  win 48.8%  exp +0.35%  PF 1.14  net at $1k/trade +$4483
+    selection (<= 2026-02-02): n=580  win 51.7%  exp +0.35%  PF 1.16  net at $1k/trade +$2052
+    validation (> 2026-02-02): n=688  win 46.4%  exp +0.35%  PF 1.13  net at $1k/trade +$2432
+    descriptive line, no verdict; would read: NOT QUALIFIED
+    exit mix: hold 89%, stop 11%
+    SPY below its 50-day: n=239  win 55.6%  exp +0.79%  PF 1.34  net at $1k/trade +$1880
+    selection (<= 2026-03-09): n=120  win 50.8%  exp +0.23%  PF 1.09  net at $1k/trade +$273
+    validation (> 2026-03-09): n=119  win 60.5%  exp +1.35%  PF 1.69  net at $1k/trade +$1607
+    descriptive line, no verdict; would read: PASS (n >= 30, exp > 0, PF >= 1.3, both halves positive)
+    exit mix: hold 91%, stop 9%
+  T11 against the unfiltered rule on the unseen window: +0.15% vs +0.34% per trade (not better)
+
+11.8 min

@@ -331,6 +331,42 @@ halves of that window positive, and expectancy above the unfiltered
 T10 rule on the same window. The T10 window is reported split by the
 same filter for reference only (seen, cannot count).
 
+Result (2026-09-23, Yahoo daily and the Nasdaq calendar, 936 sessions
+from 2022-12-28): NOT QUALIFIED, and backwards. On the unseen window
+(2023-01-03 to 2025-07-24) the uptrend filter made the drift worse: SPY
+above its 50-day n=2,036, 47.9% win, +0.15%/trade, PF 1.06, halves
+-0.20% / +0.56%, against +0.34% unfiltered (n=2,766, PF 1.15, halves
+-0.05% / +0.72%). The reference line went the other way: SPY below its
+50-day n=730, 59.2% win, +0.86%/trade, PF 1.44, halves +0.64% / +1.00%.
+On the T10 window the same split repeats: below n=239, 55.6% win,
++0.79%, PF 1.34, halves +0.23% / +1.35%; above n=1,268, +0.35%, PF 1.14.
+The first try at an earlier run died at 500 of 935 sessions when the
+session went idle; this is the rerun. File:
+docs/results/theory-t11-2026-09-23-yahoo.txt.
+
+## T12 Earnings drift in a pullback (registered 2026-09-24 02:15 UTC, after T11, before running)
+
+Statement: T10's long signal (reaction day +5% or more, closing in the
+upper half of its range; entry at the next open, or after both candidate
+days when the report time is not supplied; 5-session hold; stop on a
+close 2 ATR against) pays when SPY closed below its 50-day average on the
+reaction day. Chosen after seeing T11, where it was the reference line
+and passed on both windows (n=730 and n=239), so neither window counts.
+Mechanism offered, not tested: in a pulled-back market, names whose
+earnings were rewarded carry relative strength into the recovery; the
+bounce diagnostic showed the same regime split (+0.68% below the 50-day
+against +0.07% above).
+
+Validation on a third window no test has used: 2020-01-02 to 2022-12-27
+(Yahoo daily bars, Nasdaq calendar, today's universe, so survivorship
+flatters longs; the comparison with the unfiltered rule on the same
+window is what counts).
+
+Pass: on that window, n >= 30, expectancy > 0, PF >= 1.3, both halves
+positive, and expectancy above the unfiltered rule on the same window.
+If it passes, it is a forward-test swing setup that switches on only
+when SPY is below its 50-day; SPY was above it on 2026-09-23.
+
 Result: pending.
 
 ## Operator store runs (149 sessions of Schwab bars, on the operator's machine)
