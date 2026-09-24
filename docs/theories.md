@@ -367,7 +367,21 @@ positive, and expectancy above the unfiltered rule on the same window.
 If it passes, it is a forward-test swing setup that switches on only
 when SPY is below its 50-day; SPY was above it on 2026-09-23.
 
-Result: pending.
+Result (2026-09-23, Yahoo daily and the Nasdaq calendar, 753 sessions
+2020-01-02 to 2022-12-27): NOT QUALIFIED. SPY below its 50-day n=882,
+52.4% win, +0.36%/trade, PF 1.11: better than the unfiltered rule on the
+same window (n=2,845, +0.17%, PF 1.06), but short of PF 1.3, and the
+second half lost (selection to 2022-03-04 +1.09%, PF 1.36; validation
+-0.29%, PF 0.91). The losing half is the 2022 bear market, when SPY sat
+below its 50-day for months. Across the three windows the pattern is
+consistent: earnings winners bought in a pullback inside a rising market
+paid (2020-21, 2023-25, 2025-26); in a sustained decline they did not.
+A version limited to pullbacks inside an uptrend (SPY below its 50-day
+and above its 200-day) is the obvious next rule, but every year from
+2020 to 2026 has now been looked at, so it could only be validated
+before 2020, where today's universe carries more survivorship, or
+forward. Earnings-drift swings are not on the menu. File:
+docs/results/theory-t12-2026-09-23-yahoo.txt.
 
 ## Operator store runs (149 sessions of Schwab bars, on the operator's machine)
 
