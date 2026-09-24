@@ -240,7 +240,8 @@ async function snapshot(rest: SchwabRest | null, yahoo: YahooHistoricalBars, row
       const st = evaluate(eff, candles, nowMin);
       const last = candles[candles.length - 1];
       lines.push(`${row.star ? "*" : " "}${row.symbol.padEnd(5)} ${row.side.padEnd(5)} PM ${eff.pmHigh.toFixed(2)}/${eff.pmLow.toFixed(2)}${moved ? ` (packet ${row.pmHigh.toFixed(2)}/${row.pmLow.toFixed(2)})` : ""}  ATR ${row.atr.toFixed(2)}  open ${candles[0]?.o.toFixed(2) ?? "n/a"}  last ${last ? `${last.c.toFixed(2)} ${hhmm(last.t)}${last.t + 5 > nowMin ? " (forming)" : ""}` : "n/a"}`);
-      lines.push(`       ${row.star ? "" : row.tier === "mega" ? "[mega-cap, T2/T8, store validation pending] " : "[watch row, paper only] "}${st.line}`);
+      const label = row.star ? "" : row.tier === "mega" ? "[mega-cap, T2/T8, store validation pending] " : row.tier === "large" ? "[10%+ gap, forward test, small size] " : "[watch row, paper only] ";
+      lines.push(`       ${label}${st.line}`);
       for (const e of st.events) lines.push(`       ${e}`);
       const tail = candles.slice(-4).map((c) => `${hhmm(c.t)} O ${c.o.toFixed(2)} H ${c.h.toFixed(2)} L ${c.l.toFixed(2)} C ${c.c.toFixed(2)} ${(c.v / 1000).toFixed(0)}k${c.t + 5 > nowMin ? " (forming)" : ""}`);
       if (tail.length) lines.push(`       ${tail.join(" | ")}`);
