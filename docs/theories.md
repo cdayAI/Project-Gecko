@@ -344,7 +344,7 @@ The first try at an earlier run died at 500 of 935 sessions when the
 session went idle; this is the rerun. File:
 docs/results/theory-t11-2026-09-23-yahoo.txt.
 
-## T12 Earnings drift in a pullback (registered 2026-09-24 02:15 UTC, after T11, before running)
+## T12 Earnings drift in a pullback (registered 2026-09-24 02:13 UTC, after T11, before running)
 
 Statement: T10's long signal (reaction day +5% or more, closing in the
 upper half of its range; entry at the next open, or after both candidate
