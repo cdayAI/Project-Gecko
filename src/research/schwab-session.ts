@@ -9,6 +9,7 @@
 // Returns null (with the reason) when falling back is acceptable; throws
 // when the caller demanded Schwab explicitly.
 
+import { loadSchwabApp } from "../brokers/schwab/app-file.js";
 import "dotenv/config";
 import { SchwabAuth } from "../brokers/schwab/auth.js";
 import { SchwabRest } from "../brokers/schwab/rest.js";
@@ -26,14 +27,16 @@ export async function schwabSession(provider: ProviderChoice): Promise<SchwabSes
   // An existing but unreadable vault fails closed rather than falling through.
   const vaultAuth = await loadWindowsVaultAuth();
   if (vaultAuth) return { rest: new SchwabRest(vaultAuth, { marketDataOnly: true }), reason: "Windows vault" };
-  const clientId = process.env.SCHWAB_CLIENT_ID ?? "";
-  const clientSecret = process.env.SCHWAB_CLIENT_SECRET ?? "";
+  // Environment first, then the app file written by `npm run schwab-login` (cloud sessions).
+  const savedApp = loadSchwabApp();
+  const clientId = process.env.SCHWAB_CLIENT_ID ?? savedApp?.clientId ?? "";
+  const clientSecret = process.env.SCHWAB_CLIENT_SECRET ?? savedApp?.clientSecret ?? "";
   if (!clientId || !clientSecret) {
     const reason = "no Windows Schwab vault and SCHWAB_CLIENT_ID / SCHWAB_CLIENT_SECRET not set (environment or .env in this directory)";
     if (provider === "schwab") throw new Error(`--provider schwab: ${reason}`);
     return { rest: null, reason };
   }
-  const auth = new SchwabAuth({ clientId, clientSecret, redirectUri: process.env.SCHWAB_REDIRECT_URI ?? "https://localhost:8443/callback" });
+  const auth = new SchwabAuth({ clientId, clientSecret, redirectUri: process.env.SCHWAB_REDIRECT_URI ?? savedApp?.redirectUri ?? "https://localhost:8443/callback" });
   const loaded = await auth.load();
   if (!loaded) {
     const reason = "no tokens in data/oauth-tokens.json (run npm run auth; the refresh token lasts 7 days)";
