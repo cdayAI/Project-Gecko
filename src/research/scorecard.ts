@@ -91,6 +91,12 @@ async function fetchBars(rest: SchwabRest | null, yahoo: YahooHistoricalBars, sy
   return { bars: [...bars], source: "yahoo" };
 }
 
+// The rule's extreme is the whole pre-market through 09:30; the packet printed a snapshot.
+function effectiveRow(row: PacketRow, bars: readonly Bar[], date: string): PacketRow {
+  const pre = bars.filter((b) => etParts(b.timestamp).date === date && minuteOf(b.timestamp) < OPEN_MIN);
+  return pre.length ? { ...row, pmHigh: Math.max(...pre.map((b) => b.high)), pmLow: Math.min(...pre.map((b) => b.low)) } : row;
+}
+
 function scoreRow(row: PacketRow, bars: readonly Bar[], date: string): Outcome {
   const rth = bars.filter((b) => { const m = minuteOf(b.timestamp); return etParts(b.timestamp).date === date && m >= OPEN_MIN && m < CLOSE_MIN; }).sort((a, b) => a.timestamp - b.timestamp);
   if (rth.length < 3) return { kind: "no bars", detail: `${rth.length} regular-session bars` };
@@ -198,19 +204,21 @@ async function main(): Promise<void> {
   const table: string[] = ["| Sym | Tier | Side | Trigger | Result | Entry | Exit | Return | Catalyst in the packet |", "|---|---|---|---|---|---:|---:|---:|---|"];
   let triggered = 0;
   let barsSource = "";
-  for (const row of scan.rows) {
-    const long = row.side === "long";
-    const trigger = `5m close ${long ? ">" : "<"} ${(long ? row.pmHigh : row.pmLow).toFixed(2)}`;
-    const catalyst = catalystFor(args.date, row.symbol);
+  for (const packetRow of scan.rows) {
+    const long = packetRow.side === "long";
+    const catalyst = catalystFor(args.date, packetRow.symbol);
+    let row = packetRow;
     let o: Outcome;
     try {
-      const got = await fetchBars(session.rest, yahoo, row.symbol, args.date);
+      const got = await fetchBars(session.rest, yahoo, packetRow.symbol, args.date);
       barsSource = got.source;
+      row = effectiveRow(packetRow, got.bars, args.date);
       o = scoreRow(row, got.bars, args.date);
       if (o.kind === "trade") { triggered++; records.push(toRecord(row, o, args.date, catalyst, got.source, packetTime)); }
     } catch (err) {
       o = { kind: "no bars", detail: err instanceof Error ? err.message : String(err) };
     }
+    const trigger = `5m close ${long ? ">" : "<"} ${(long ? row.pmHigh : row.pmLow).toFixed(2)}`;
     const cat = catalyst ? catalyst.replace(/\|/g, "/").slice(0, 70) : "none in the packet";
     if (o.kind === "trade") {
       const last = o.t.exits[o.t.exits.length - 1];

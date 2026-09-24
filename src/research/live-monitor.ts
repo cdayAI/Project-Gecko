@@ -230,10 +230,16 @@ async function snapshot(rest: SchwabRest | null, yahoo: YahooHistoricalBars, row
   const lines: string[] = [`===== Live monitor ${p.date} ${hhmm(nowMin)} ET (${providerName}) =====`, `Tape: ${await tapeLine(rest, yahoo, now, p.date)}`, ""];
   for (const row of rows) {
     try {
-      const candles = fiveMinute(await fetchMinutes(rest, yahoo, row.symbol, now, false), p.date);
-      const st = evaluate(row, candles, nowMin);
+      // The rule's extreme is the whole pre-market through 09:30, not the packet's snapshot:
+      // recompute it from today's extended-hours bars and fall back to the packet when there are none.
+      const mins = await fetchMinutes(rest, yahoo, row.symbol, now, true);
+      const pre = mins.filter((m) => etParts(m.ts).date === p.date && minuteOf(m.ts) < OPEN_MIN);
+      const eff: Row = pre.length ? { ...row, pmHigh: Math.max(...pre.map((m) => m.h)), pmLow: Math.min(...pre.map((m) => m.l)) } : row;
+      const moved = Math.abs(eff.pmHigh / row.pmHigh - 1) > 0.002 || Math.abs(eff.pmLow / row.pmLow - 1) > 0.002;
+      const candles = fiveMinute(mins, p.date);
+      const st = evaluate(eff, candles, nowMin);
       const last = candles[candles.length - 1];
-      lines.push(`${row.star ? "*" : " "}${row.symbol.padEnd(5)} ${row.side.padEnd(5)} PM ${row.pmHigh.toFixed(2)}/${row.pmLow.toFixed(2)}  ATR ${row.atr.toFixed(2)}  open ${candles[0]?.o.toFixed(2) ?? "n/a"}  last ${last ? `${last.c.toFixed(2)} ${hhmm(last.t)}${last.t + 5 > nowMin ? " (forming)" : ""}` : "n/a"}`);
+      lines.push(`${row.star ? "*" : " "}${row.symbol.padEnd(5)} ${row.side.padEnd(5)} PM ${eff.pmHigh.toFixed(2)}/${eff.pmLow.toFixed(2)}${moved ? ` (packet ${row.pmHigh.toFixed(2)}/${row.pmLow.toFixed(2)})` : ""}  ATR ${row.atr.toFixed(2)}  open ${candles[0]?.o.toFixed(2) ?? "n/a"}  last ${last ? `${last.c.toFixed(2)} ${hhmm(last.t)}${last.t + 5 > nowMin ? " (forming)" : ""}` : "n/a"}`);
       lines.push(`       ${row.star ? "" : row.tier === "mega" ? "[mega-cap, T2/T8, store validation pending] " : "[watch row, paper only] "}${st.line}`);
       for (const e of st.events) lines.push(`       ${e}`);
       const tail = candles.slice(-4).map((c) => `${hhmm(c.t)} O ${c.o.toFixed(2)} H ${c.h.toFixed(2)} L ${c.l.toFixed(2)} C ${c.c.toFixed(2)} ${(c.v / 1000).toFixed(0)}k${c.t + 5 > nowMin ? " (forming)" : ""}`);

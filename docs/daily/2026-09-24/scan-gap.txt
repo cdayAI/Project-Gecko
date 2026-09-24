@@ -1,0 +1,37 @@
+
+> gecko@0.2.0 scan:gap
+> node --import tsx src/research/gap-scan.ts --provider yahoo
+
+
+===== Pre-market gap scan 2026-09-24 08:42 ET =====
+Source: universe file (1716 names, built 2026-09-24T11:48Z, using top 1500 by dollar volume)
+Provider: yahoo (5m bars, no pre-market volume) because yahoo requested
+Tape: SPY -0.46%  QQQ -0.93%  IWM -0.37%  SMH -1.85%  XBI -0.57%  XLF -0.03%  XLE +1.09%  XLK -1.48%  XLV +0.02%  XLI -0.90%  XLY +0.16%
+Scanned 1500: 8 gaps >= 5%, 402 without pre-market prints, 0 failed, 2.6 min
+
+GAP UP: LARGE (gap >= 10%; forward test only, small size)
+  Sym     Pre-mkt    Gap%  PM vol  PM high   PM low   20d hi   52w hi >20d >52w <20dLo     ATR  $vol20 Sector      Contract  |  historical bucket
+   FRVO     18.52  +13.27     n/a    18.80    16.20    20.07    42.65  -    -    -      1.20    128M SPY -0.5%   FRVO261016C00020000  2026-10-16 20C  0.55/0.70 d0.28 oi 1312  |  gap10%+: 45% win -0.28% (Mar-Jun) / 54% win +0.55% (Jun-Sep), n=314
+
+GAP UP: WATCH (5-10%; no edge in the tests)
+  Sym     Pre-mkt    Gap%  PM vol  PM high   PM low   20d hi   52w hi >20d >52w <20dLo     ATR  $vol20 Sector      Contract  |  historical bucket
+   XRAY     10.60   +8.38     n/a    10.60     9.71    11.72    14.76  -    -    -      0.46     45M SPY -0.5%   XRAY261016C00012500  2026-10-16 12.5C  0.00/0.05 d0.11 oi 2090  |  gap5-10%: ~42-46% win, about -0.2% (no edge)
+
+GAP UP: MEGA-CAP (2-5% gaps in names trading $1B a day; T2 in docs/theories.md, store validation pending; paper until then)
+  none
+
+GAP DOWN: LARGE (gap <= -10%; forward test only)
+  Sym     Pre-mkt    Gap%  PM vol  PM high   PM low   20d hi   52w hi >20d >52w <20dLo     ATR  $vol20 Sector      Contract  |  historical bucket
+   MGM      33.90  -10.43     n/a    34.75    33.90    43.76    51.59  -    -    Y      0.92     97M SPY -0.5%   MGM261016P00033000  2026-10-16 33P  0.10/1.70 d-0.13 oi 49 THIN  |  gap10%+: 45% win -0.28% (Mar-Jun) / 54% win +0.55% (Jun-Sep), n=314
+   VKTX     36.21  -13.31     n/a    38.39    35.98    43.10    43.15  -    -    -      2.47    178M SPY -0.5%   VKTX261002P00035500  2026-10-02 35.5P  0.30/1.52 d-0.17 oi 0 THIN  |  gap10%+: 45% win -0.28% (Mar-Jun) / 54% win +0.55% (Jun-Sep), n=314
+
+GAP DOWN: WATCH (-5 to -10%)
+  Sym     Pre-mkt    Gap%  PM vol  PM high   PM low   20d hi   52w hi >20d >52w <20dLo     ATR  $vol20 Sector      Contract  |  historical bucket
+   SNX     262.95   -8.66     n/a   297.50   255.00   298.77   298.77  -    -    -      9.46    204M SPY -0.5%   SNX261016P00260000  2026-10-16 260P  2.35/5.90 d-0.22 oi 123  |  gap5-10%: ~42-46% win, about -0.2% (no edge)
+   GRAL     99.74   -8.09     n/a   123.44    98.00   111.50   118.84  -    -    -      5.54     82M XBI -0.6%   GRAL261016P00095000  2026-10-16 95P  4.60/6.00 d-0.25 oi 180  |  gap5-10%: ~42-46% win, about -0.2% (no edge)
+   DK       67.06   -7.20     n/a    72.30    66.25    82.27    82.27  -    -    -      4.26    182M SPY -0.5%   DK261016P00065000  2026-10-16 65P  1.40/1.95 d-0.22 oi 337  |  gap5-10%: ~42-46% win, about -0.2% (no edge)
+   BE      259.58   -5.63     n/a   274.20   256.00   288.00   351.28  -    -    -     18.36   4117M SPY -0.5%   BE261002P00252500  2026-10-02 252.5P  4.20/5.40 d-0.22 oi 76  |  gap5-10%: ~42-46% win, about -0.2% (no edge)
+
+Entry rule (H-GAP-GO as registered; see docs/gap-and-go-registration-2026-09-21.md): no pre-market orders. Enter on the first 5-minute candle that CLOSES beyond the pre-market extreme (earliest 09:35). Stop: 5-minute close back through the 09:30 candle's opposite extreme. Targets: 1 ATR (half), 1.5 ATR (rest). Time exit 15:45. Skip if the open is more than 1.5% beyond the pre-market extreme. Status after the six-month Schwab-history test (docs/gap-and-go-registration-2026-09-21.md): the family is NOT a qualified edge (base rule PF 0.73 / 0.78 in both halves). Rows marked * meet the one specification that was positive in both halves of 123 sessions (H-GAP-SECTOR-LONG: gap >= 10%, above the 20-day high, LONG, sector ETF up pre-market): 55% win, about +0.4%/trade on the stock, PF 1.3, roughly one a day, and possibly chance (one survivor of 480 variants). Forward test those at small size and log every fill; treat unmarked rows as watch only. Tighter targets, time exits, wider stops did not survive; do not improvise them.
+Options do not trade before 09:30, so the option marks and deltas shown are the prior close's; the strike was chosen against the pre-market price. Read the live quote at 09:30 and pay at most 10% over that mid. Max loss is the full premium; the stop lives on the stock.
+
