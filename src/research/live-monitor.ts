@@ -237,7 +237,14 @@ async function snapshot(rest: SchwabRest | null, yahoo: YahooHistoricalBars, row
       const eff: Row = pre.length ? { ...row, pmHigh: Math.max(...pre.map((m) => m.h)), pmLow: Math.min(...pre.map((m) => m.l)) } : row;
       const moved = Math.abs(eff.pmHigh / row.pmHigh - 1) > 0.002 || Math.abs(eff.pmLow / row.pmLow - 1) > 0.002;
       const candles = fiveMinute(mins, p.date);
-      const st = evaluate(eff, candles, nowMin);
+      let st = evaluate(eff, candles, nowMin);
+      if (candles.length === 0 && pre.length > 0) {
+        const pl = pre[pre.length - 1];
+        const long = eff.side === "long";
+        const ext = long ? eff.pmHigh : eff.pmLow;
+        const skip = long ? ext * (1 + SKIP_PCT / 100) : ext * (1 - SKIP_PCT / 100);
+        st = { line: `PRE-OPEN last ${pl.c.toFixed(2)} at ${hhmm(minuteOf(pl.ts))}; trigger a 5m close ${long ? "above" : "below"} ${ext.toFixed(2)} (${pct(long ? ext : pl.c, long ? pl.c : ext)} away); skip if it opens ${long ? "above" : "below"} ${skip.toFixed(2)}`, events: [] };
+      }
       const last = candles[candles.length - 1];
       lines.push(`${row.star ? "*" : " "}${row.symbol.padEnd(5)} ${row.side.padEnd(5)} PM ${eff.pmHigh.toFixed(2)}/${eff.pmLow.toFixed(2)}${moved ? ` (packet ${row.pmHigh.toFixed(2)}/${row.pmLow.toFixed(2)})` : ""}  ATR ${row.atr.toFixed(2)}  open ${candles[0]?.o.toFixed(2) ?? "n/a"}  last ${last ? `${last.c.toFixed(2)} ${hhmm(last.t)}${last.t + 5 > nowMin ? " (forming)" : ""}` : "n/a"}`);
       const label = row.star ? "" : row.tier === "mega" ? "[mega-cap, T2/T8, store validation pending] " : row.tier === "large" ? "[10%+ gap, forward test, small size] " : "[watch row, paper only] ";
@@ -293,7 +300,9 @@ async function main(): Promise<void> {
 
   for (;;) {
     try {
-      process.stdout.write("\n" + await snapshot(rest, yahoo, rows, providerName, args.date));
+      const text = await snapshot(rest, yahoo, rows, providerName, args.date);
+      // On a terminal each refresh replaces the last one (a live board); piped output keeps every snapshot.
+      process.stdout.write((process.stdout.isTTY && !args.once ? "\x1b[2J\x1b[H" : "\n") + text);
     } catch (err) {
       process.stdout.write(`snapshot failed: ${err instanceof Error ? err.message : String(err)}\n`);
     }
