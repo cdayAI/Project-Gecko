@@ -242,7 +242,17 @@ async function main(): Promise<void> {
     ? fs.readFileSync(scoreFile, "utf-8").split("\n").slice(1)
     : [`not scored: ${scored.out.trim().split("\n").filter((l) => l.trim()).slice(-1)[0] ?? "no output"}`];
 
-  // Universe and levels.
+  const notes: string[] = [];
+
+  // Universe and levels: refresh the 20-day high and low, ATR and dollar volume
+  // when the file is more than 20 hours old, so tonight's list and the morning
+  // scan use levels that include today's session.
+  const before = loadUniverse();
+  if (before && now - Date.parse(before.builtAt) > 20 * 3_600_000 && !args.symbols) {
+    say(`      refreshing universe levels (built ${before.builtAt.slice(0, 16)}Z)`);
+    const refreshed = run("npm", ["run", "universe:build", "--", "--refresh", "--provider", args.provider]);
+    if (!refreshed.ok) notes.push(`universe refresh failed; levels are from ${before.builtAt.slice(0, 10)}`);
+  }
   const uni = loadUniverse();
   const entries = new Map<string, UniverseEntry>();
   for (const e of uni?.entries.slice(0, args.maxNames) ?? []) entries.set(e.symbol, e);
@@ -252,7 +262,6 @@ async function main(): Promise<void> {
   // Snapshots: close, after-hours print, day range.
   say(`[1/6] quotes for ${names.length + SECTOR_ETFS.length} symbols (${providerName})`);
   const snaps = new Map<string, Snap>();
-  const notes: string[] = [];
   if (rest) {
     const r = await schwabSnaps(rest, [...SECTOR_ETFS, ...names], today);
     for (const [k, v] of r.snaps) snaps.set(k, v);

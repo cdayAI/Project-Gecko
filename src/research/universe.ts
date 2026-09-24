@@ -161,16 +161,18 @@ interface BuildArgs {
   minDollarVol: number;
   limit: number;
   provider: ProviderChoice;
+  refresh: boolean;            // recompute levels for the current universe's names only (no listing download, no re-screen of new names)
 }
 
 function parseArgs(argv: readonly string[]): BuildArgs {
-  const out: BuildArgs = { minPrice: 5, minDollarVol: 30_000_000, limit: 0, provider: "auto" };
+  const out: BuildArgs = { minPrice: 5, minDollarVol: 30_000_000, limit: 0, provider: "auto", refresh: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--min-price") out.minPrice = Number(argv[++i]);
     else if (a === "--min-dollar-volume") out.minDollarVol = Number(argv[++i]);
     else if (a === "--limit") out.limit = Number(argv[++i]);
     else if (a === "--provider") out.provider = parseProvider(argv[++i]);
+    else if (a === "--refresh") out.refresh = true;
   }
   return out;
 }
@@ -178,7 +180,12 @@ function parseArgs(argv: readonly string[]): BuildArgs {
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   setLogLevel("warn");
-  const listings = await fetchListings();
+  // --refresh: the current universe's names with fresh levels (20-day high and low, ATR, dollar volume);
+  // a name whose fetch fails keeps its previous entry rather than dropping out.
+  const previous = args.refresh ? loadUniverse() : null;
+  if (args.refresh && !previous) throw new Error("--refresh needs an existing universe file; run npm run universe:build first");
+  const listings = previous ? previous.entries.map((e) => ({ symbol: e.symbol, name: e.name, exchange: e.exchange })) : await fetchListings();
+  const previousBySymbol = new Map((previous?.entries ?? []).map((e) => [e.symbol, e] as const));
   let work = args.limit > 0 ? listings.slice(0, args.limit) : listings;
   const yahoo = new YahooHistoricalBars();
   const session = await schwabSession(args.provider);
@@ -206,11 +213,16 @@ async function main(): Promise<void> {
       const s = statsFromDaily(l.symbol, daily, today);
       if (s && s.lastClose >= args.minPrice && s.avgDollarVol20 >= args.minDollarVol) {
         entries.push({ ...s, name: l.name, exchange: l.exchange });
+      } else if (!s && previousBySymbol.has(l.symbol)) {
+        entries.push(previousBySymbol.get(l.symbol) as UniverseEntry);
+        failed++;
       } else {
         screened++;
       }
     } catch {
       failed++;
+      const old = previousBySymbol.get(l.symbol);
+      if (old) entries.push(old);
     }
     if ((i + 1) % 250 === 0 || i + 1 === work.length) {
       const elapsedMin = (Date.now() - startedAt) / 60_000;
