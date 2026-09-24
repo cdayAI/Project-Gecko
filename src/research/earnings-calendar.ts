@@ -28,8 +28,10 @@ interface NasdaqRow { symbol?: unknown; name?: unknown; time?: unknown; epsForec
 
 export async function fetchEarnings(date: string): Promise<readonly EarningsRow[]> {
   const cache = path.join(CACHE_DIR, `${date}.json`);
+  // A calendar for a date more than three days past no longer changes; cache it for good.
+  const settled = Date.parse(`${date}T12:00:00Z`) < Date.now() - 3 * 86_400_000;
   try {
-    if (fs.existsSync(cache) && Date.now() - fs.statSync(cache).mtimeMs < CACHE_TTL_MS) {
+    if (fs.existsSync(cache) && (settled || Date.now() - fs.statSync(cache).mtimeMs < CACHE_TTL_MS)) {
       return JSON.parse(fs.readFileSync(cache, "utf-8")) as EarningsRow[];
     }
   } catch (err) {

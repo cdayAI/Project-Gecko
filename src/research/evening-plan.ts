@@ -143,7 +143,8 @@ async function yahooSnap(yahoo: YahooHistoricalBars, symbol: string, today: stri
   const ahLast = ah.length ? ah[ah.length - 1].close : null;
   return {
     symbol, close, closeSource: "regular", dayPct: prev ? (close / prev - 1) * 100 : null,
-    ahLast, ahPct: ahLast !== null ? (ahLast / close - 1) * 100 : null, ahVol: ah.length ? ah.reduce((a, b) => a + b.volume, 0) : null,
+    // Yahoo reports no extended-hours volume (zeros); unknown stays null so the volume floor is not applied blindly.
+    ahLast, ahPct: ahLast !== null ? (ahLast / close - 1) * 100 : null, ahVol: ah.length && ah.some((b) => b.volume > 0) ? ah.reduce((a, b) => a + b.volume, 0) : null,
     open: reg[0].open, high: Math.max(...reg.map((b) => b.high)), low: Math.min(...reg.map((b) => b.low)),
   };
 }
