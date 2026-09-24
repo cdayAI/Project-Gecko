@@ -1,0 +1,428 @@
+{
+  "for": "2026-09-24",
+  "builtAt": "2026-09-24T01:48:37.892Z",
+  "provider": "yahoo (yahoo requested)",
+  "candidates": [
+    {
+      "symbol": "FSLY",
+      "tags": [
+        "AH-",
+        "CONT+"
+      ],
+      "side": "either",
+      "close": 29.6595,
+      "ahLast": 28.5,
+      "ahPct": -3.9094,
+      "starLevel": 32.6255,
+      "high20": 25.75,
+      "atr": 1.7984,
+      "sector": "XLK"
+    },
+    {
+      "symbol": "MGM",
+      "tags": [
+        "AH-"
+      ],
+      "side": "short",
+      "close": 37.845,
+      "ahLast": 33.7,
+      "ahPct": -10.9526,
+      "starLevel": 34.0605,
+      "high20": 44.31,
+      "atr": 0.8836,
+      "sector": "SPY"
+    },
+    {
+      "symbol": "VKTX",
+      "tags": [
+        "AH-"
+      ],
+      "side": "short",
+      "close": 41.6,
+      "ahLast": 38.1599,
+      "ahPct": -8.2695,
+      "starLevel": 37.44,
+      "high20": 34.994,
+      "atr": 1.4185,
+      "sector": "SPY"
+    },
+    {
+      "symbol": "P",
+      "tags": [
+        "AH+"
+      ],
+      "side": "long",
+      "close": 109.65,
+      "ahLast": 118.41,
+      "ahPct": 7.9891,
+      "starLevel": 120.615,
+      "high20": 112.7,
+      "atr": 5.0689,
+      "sector": "XLY"
+    },
+    {
+      "symbol": "PAGP",
+      "tags": [
+        "AH+"
+      ],
+      "side": "long",
+      "close": 26.69,
+      "ahLast": 28.535,
+      "ahPct": 6.9127,
+      "starLevel": 29.359,
+      "high20": 28.7,
+      "atr": 0.4993,
+      "sector": "SPY"
+    },
+    {
+      "symbol": "U",
+      "tags": [
+        "AH+"
+      ],
+      "side": "long",
+      "close": 44.1,
+      "ahLast": 46.3954,
+      "ahPct": 5.205,
+      "starLevel": 48.51,
+      "high20": 46.97,
+      "atr": 1.7275,
+      "sector": "XLK"
+    },
+    {
+      "symbol": "DYN",
+      "tags": [
+        "AH+"
+      ],
+      "side": "long",
+      "close": 16.22,
+      "ahLast": 16.84,
+      "ahPct": 3.8224,
+      "starLevel": 17.842,
+      "high20": 26.87,
+      "atr": 1.4481,
+      "sector": "SPY"
+    },
+    {
+      "symbol": "BNS",
+      "tags": [
+        "AH+"
+      ],
+      "side": "long",
+      "close": 92.25,
+      "ahLast": 95.5759,
+      "ahPct": 3.6053,
+      "starLevel": 101.475,
+      "high20": 95.34,
+      "atr": 1.5036,
+      "sector": "SPY"
+    },
+    {
+      "symbol": "LBRT",
+      "tags": [
+        "AH+"
+      ],
+      "side": "long",
+      "close": 18.26,
+      "ahLast": 18.89,
+      "ahPct": 3.4502,
+      "starLevel": 20.086,
+      "high20": 22.27,
+      "atr": 0.9491,
+      "sector": "SPY"
+    },
+    {
+      "symbol": "BAH",
+      "tags": [
+        "AH+"
+      ],
+      "side": "long",
+      "close": 75.67,
+      "ahLast": 78,
+      "ahPct": 3.0792,
+      "starLevel": 83.237,
+      "high20": 81.19,
+      "atr": 2.3857,
+      "sector": "SPY"
+    },
+    {
+      "symbol": "KNF",
+      "tags": [
+        "AH+"
+      ],
+      "side": "long",
+      "close": 51.43,
+      "ahLast": 53,
+      "ahPct": 3.0527,
+      "starLevel": 56.573,
+      "high20": 68.005,
+      "atr": 1.9327,
+      "sector": "SPY"
+    },
+    {
+      "symbol": "DRI",
+      "tags": [
+        "ER-BMO"
+      ],
+      "side": "either",
+      "close": 213.81,
+      "ahLast": 213.25,
+      "ahPct": -0.2619,
+      "starLevel": 235.191,
+      "high20": 227.28,
+      "atr": 5.1114,
+      "sector": "SPY"
+    },
+    {
+      "symbol": "SNX",
+      "tags": [
+        "ER-BMO"
+      ],
+      "side": "either",
+      "close": 287.92,
+      "ahLast": 289.423,
+      "ahPct": 0.522,
+      "starLevel": 316.712,
+      "high20": 269.99,
+      "atr": 7.7786,
+      "sector": "SPY"
+    },
+    {
+      "symbol": "BB",
+      "tags": [
+        "ER-BMO"
+      ],
+      "side": "either",
+      "close": 8.395,
+      "ahLast": 8.42,
+      "ahPct": 0.2978,
+      "starLevel": 9.2345,
+      "high20": 8.83,
+      "atr": 0.3129,
+      "sector": "SPY"
+    },
+    {
+      "symbol": "HUBG",
+      "tags": [
+        "ER?"
+      ],
+      "side": "either",
+      "close": 31.37,
+      "ahLast": 31.4,
+      "ahPct": 0.0956,
+      "starLevel": 34.507,
+      "high20": 41.24,
+      "atr": 1.7236,
+      "sector": "SPY"
+    },
+    {
+      "symbol": "VICR",
+      "tags": [
+        "CONT+"
+      ],
+      "side": "long",
+      "close": 282.94,
+      "ahLast": 283,
+      "ahPct": 0.0212,
+      "starLevel": 311.234,
+      "high20": 223.87,
+      "atr": 14.015,
+      "sector": "SMH"
+    },
+    {
+      "symbol": "NKTR",
+      "tags": [
+        "CONT-"
+      ],
+      "side": "short",
+      "close": 57.68,
+      "ahLast": 59.24,
+      "ahPct": 2.7046,
+      "starLevel": 51.912,
+      "high20": 77.76,
+      "atr": 2.86,
+      "sector": "SPY"
+    },
+    {
+      "symbol": "PLNT",
+      "tags": [
+        "CONT-"
+      ],
+      "side": "short",
+      "close": 41.01,
+      "ahLast": 41.2,
+      "ahPct": 0.4633,
+      "starLevel": 36.909,
+      "high20": 55.37,
+      "atr": 1.5857,
+      "sector": "SPY"
+    },
+    {
+      "symbol": "CHYM",
+      "tags": [
+        "CONT-"
+      ],
+      "side": "short",
+      "close": 26.47,
+      "ahLast": 26.6497,
+      "ahPct": 0.6789,
+      "starLevel": 23.823,
+      "high20": 35.55,
+      "atr": 1.6043,
+      "sector": "SPY"
+    },
+    {
+      "symbol": "PGY",
+      "tags": [
+        "CONT-"
+      ],
+      "side": "short",
+      "close": 18.71,
+      "ahLast": 18.68,
+      "ahPct": -0.1603,
+      "starLevel": 16.839,
+      "high20": 23.68,
+      "atr": 1.2111,
+      "sector": "SPY"
+    },
+    {
+      "symbol": "ABNB",
+      "tags": [
+        "CONT-"
+      ],
+      "side": "short",
+      "close": 149.67,
+      "ahLast": 150.05,
+      "ahPct": 0.2539,
+      "starLevel": 134.703,
+      "high20": 193.453,
+      "atr": 4.6276,
+      "sector": "XLY"
+    },
+    {
+      "symbol": "FORM",
+      "tags": [
+        "CONT+"
+      ],
+      "side": "long",
+      "close": 131.39,
+      "ahLast": 130.98,
+      "ahPct": -0.312,
+      "starLevel": 144.529,
+      "high20": 118.67,
+      "atr": 6.3229,
+      "sector": "SPY"
+    },
+    {
+      "symbol": "GEN",
+      "tags": [
+        "CONT-"
+      ],
+      "side": "short",
+      "close": 26.235,
+      "ahLast": 26.7093,
+      "ahPct": 1.8079,
+      "starLevel": 23.6115,
+      "high20": 31.65,
+      "atr": 0.8586,
+      "sector": "SPY"
+    },
+    {
+      "symbol": "CAR",
+      "tags": [
+        "CONT-"
+      ],
+      "side": "short",
+      "close": 105.72,
+      "ahLast": 107.55,
+      "ahPct": 1.731,
+      "starLevel": 95.148,
+      "high20": 149.85,
+      "atr": 5.9821,
+      "sector": "SPY"
+    },
+    {
+      "symbol": "RYAN",
+      "tags": [
+        "CONT-"
+      ],
+      "side": "short",
+      "close": 36.16,
+      "ahLast": 36.17,
+      "ahPct": 0.0277,
+      "starLevel": 32.544,
+      "high20": 44.62,
+      "atr": 1.5596,
+      "sector": "SPY"
+    },
+    {
+      "symbol": "COMP",
+      "tags": [
+        "CONT-"
+      ],
+      "side": "short",
+      "close": 9.17,
+      "ahLast": 9.1014,
+      "ahPct": -0.7481,
+      "starLevel": 8.253,
+      "high20": 12.01,
+      "atr": 0.495,
+      "sector": "SPY"
+    },
+    {
+      "symbol": "PAYX",
+      "tags": [
+        "CONT-"
+      ],
+      "side": "short",
+      "close": 104.49,
+      "ahLast": 105.6,
+      "ahPct": 1.0623,
+      "starLevel": 94.041,
+      "high20": 127.98,
+      "atr": 2.57,
+      "sector": "SPY"
+    },
+    {
+      "symbol": "ABVX",
+      "tags": [
+        "CONT-"
+      ],
+      "side": "short",
+      "close": 94,
+      "ahLast": 95,
+      "ahPct": 1.0638,
+      "starLevel": 84.6,
+      "high20": 121.45,
+      "atr": 4.8921,
+      "sector": "SPY"
+    },
+    {
+      "symbol": "LPLA",
+      "tags": [
+        "CONT-"
+      ],
+      "side": "short",
+      "close": 302.47,
+      "ahLast": 302.47,
+      "ahPct": 0,
+      "starLevel": 272.223,
+      "high20": 372.92,
+      "atr": 10.235,
+      "sector": "XLF"
+    },
+    {
+      "symbol": "NAVN",
+      "tags": [
+        "CONT-"
+      ],
+      "side": "short",
+      "close": 19.63,
+      "ahLast": 19.74,
+      "ahPct": 0.5604,
+      "starLevel": 17.667,
+      "high20": 30.88,
+      "atr": 1.6136,
+      "sector": "SPY"
+    }
+  ]
+}
